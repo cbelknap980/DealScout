@@ -11,7 +11,7 @@ Cameron's deal finder. He saves a search for an item (a Triumph Daytona 675R, us
 |---|---|---|
 | Page | `index.html`, `js/github-db.js` | GitHub Pages site. Reads the data repo with a fine-grained GitHub token pasted once per device; re-scores every listing in the browser; writes only `searches.json`, `pasted.json` and `status.json`. |
 | Cloud collector | `collectors/cloud.md` | Scheduled Claude task, 4x daily. Reads cloud-readable sites with web fetch, makes site plans, reads each ad, marks deal-priced ads for a photo check. Never emails. |
-| PC collector | `collectors/pc.md` | Scheduled Claude task, 4x daily, with Cameron's PC linked. Reads Facebook Marketplace, Cycle Trader and eBay in the Claude app's browser, reviews the photos of every deal-priced ad, sends deal emails. |
+| PC collector | `collectors/pc.md` | Scheduled Claude task, 4x daily, with Cameron's PC linked. Reads Facebook Marketplace, Cycle Trader, eBay, nationwide Craigslist and Powder7 in the Claude app's browser, reviews the photos of every deal-priced ad, sends deal emails. |
 | Data helper | `tools/ds.py` | The only way collectors read and change the data. Records each change and, on push, replays them onto the newest copy if the other collector pushed first. Python 3 standard library only. |
 | Rules | `dealscout-data/rules.json` | Thresholds, check rules and wording, read by both collectors and the page. Change a rule there, once. |
 | Map | `architecture.json` | The page's "How it works" tab, searchable. |

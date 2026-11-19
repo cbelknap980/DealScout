@@ -1,6 +1,6 @@
 {
  "title": "Two collectors and the page share one private data repo and one rules record",
- "version": "2.0",
+ "version": "2.0.1",
  "builtFrom": "index.html + js/github-db.js, collectors/cloud.md and pc.md, tools/ds.py and rules.json v1.2, as of Nov 18",
  "updatedAt": "2026-11-19T06:00:00Z",
  "columns": [
@@ -24,8 +24,8 @@
    "order": 1,
    "kind": "input",
    "name": "PC-read sites",
-   "summary": "Facebook Marketplace, Cycle Trader, eBay",
-   "does": "These sites block reads from the cloud, so only the PC collector reads them, in the Claude app's browser on Cameron's PC, signed in to Facebook with his own account. Facebook is swept from 11 US cities at 500 miles (skis: Denver, 150 miles); Cycle Trader by make and model; eBay newest first.",
+   "summary": "Facebook Marketplace, Cycle Trader, eBay, nationwide Craigslist, Powder7",
+   "does": "These sites block reads from the cloud, so only the PC collector reads them, in the Claude app's browser on Cameron's PC, signed in to Facebook with his own account. Facebook is swept from 11 US cities at 500 miles (skis: Denver, 150 miles); Cycle Trader by make and model; eBay newest first; Craigslist's nationwide searches from 8 US hubs (the cloud's reader can't open them); Powder7's used demo ski list.",
    "code": "collectors/pc.md, steps 2 to 4b",
    "live": {
     "type": "sites",
@@ -46,7 +46,11 @@
     "ebay",
     "browser",
     "pc",
-    "signed in"
+    "signed in",
+    "craigslist",
+    "powder7",
+    "hubs",
+    "nationwide"
    ]
   },
   {
@@ -55,8 +59,8 @@
    "order": 2,
    "kind": "input",
    "name": "Cloud-read sites",
-   "summary": "Craigslist, Autotrader, PowerSports, MotoHunt, forums, SidelineSwap, Powder7",
-   "does": "Sites whose pages load as text from the cloud. The cloud collector reads them with Claude's own web fetch: results pages first, then each matching ad. No paid scraper is used.",
+   "summary": "Colorado Craigslist, Autotrader, PowerSports, MotoHunt, forums, SidelineSwap, Sports Plus",
+   "does": "Sites whose pages load as text from the cloud. Craigslist here means the Colorado area pages for local-first searches; the nationwide Craigslist searches run on the PC. The cloud collector reads them with Claude's own web fetch: results pages first, then each matching ad. No paid scraper is used.",
    "code": "collectors/cloud.md, step 2 (direct checks)",
    "live": {
     "type": "sites",
@@ -76,9 +80,10 @@
     "revtero",
     "forum",
     "sidelineswap",
-    "powder7",
     "cloud",
-    "webfetch"
+    "webfetch",
+    "sportsplus",
+    "sports plus"
    ]
   },
   {
@@ -178,7 +183,7 @@
    "kind": "job",
    "name": "PC collector",
    "summary": "4x daily, Opus 5.5, Claude app browser on the PC, sends deal emails",
-   "does": "A scheduled task that runs with Cameron's PC linked. Reads Facebook, Cycle Trader and eBay in the Claude app's browser; reviews the photos of every deal-priced ad from any site by opening each image and taking a screenshot (needs the Claude window visible; otherwise the check waits); runs the independent second look for exceptional deals; confirms price and availability on the ad; then sends the deal email. Writes its own pc route and run records.",
+   "does": "A scheduled task that runs with Cameron's PC linked. Reads Facebook, Cycle Trader, eBay, the nationwide Craigslist searches and Powder7 in the Claude app's browser; reviews the photos of every deal-priced ad from any site by opening each image and taking a screenshot (needs the Claude window visible; otherwise the check waits); runs the independent second look for exceptional deals; confirms price and availability on the ad; then sends the deal email. Writes its own pc route and run records.",
    "code": "collectors/pc.md (scheduled task 'Deal Scout: PC collector' just points to it)",
    "live": {
     "type": "run",
