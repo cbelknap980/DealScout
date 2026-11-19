@@ -1,8 +1,8 @@
 {
  "title": "Two collectors and the page share one private data repo and one rules record",
- "version": "2.0.1",
- "builtFrom": "index.html + js/github-db.js, collectors/cloud.md and pc.md, tools/ds.py and rules.json v1.2, as of Nov 18",
- "updatedAt": "2026-11-19T06:00:00Z",
+ "version": "2.1",
+ "builtFrom": "index.html + js/github-db.js, collectors/cloud.md and pc.md, tools/ds.py and rules.json v1.3, as of Nov 19",
+ "updatedAt": "2026-11-19",
  "columns": [
   {
    "id": "inputs",
@@ -143,7 +143,7 @@
    "kind": "job",
    "name": "Cloud collector",
    "summary": "4x daily, Opus 5.5, web fetch and web search, never emails",
-   "does": "A scheduled task that clones both repos, reads rules.json, then reads every cloud site; sets up quick searches, site plans and what-to-verify notes; reads each ad (check 1); marks deal-priced ads \"Waiting for the PC photo check\"; refreshes prices; writes its own cloud route on each site and one run record per search; pushes through ds.py.",
+   "does": "A scheduled task that clones both repos, reads rules.json, then reads every cloud site, opening refused pages through a web-search result first and flagging a site for the PC after 3 refused runs; sets up quick searches, site plans and what-to-verify notes; reads each ad (check 1); marks deal-priced ads \"Waiting for the PC photo check\"; refreshes prices; writes its own cloud route on each site and one run record per search; pushes through ds.py.",
    "code": "collectors/cloud.md (scheduled task 'Deal Scout: cloud collector' just points to it)",
    "live": {
     "type": "run",
@@ -173,7 +173,9 @@
     "site plan",
     "verify notes",
     "run",
-    "webfetch"
+    "webfetch",
+    "search first",
+    "refused"
    ]
   },
   {
@@ -183,7 +185,7 @@
    "kind": "job",
    "name": "PC collector",
    "summary": "4x daily, Opus 5.5, Claude app browser on the PC, sends deal emails",
-   "does": "A scheduled task that runs with Cameron's PC linked. Reads Facebook, Cycle Trader, eBay, the nationwide Craigslist searches and Powder7 in the Claude app's browser; reviews the photos of every deal-priced ad from any site by opening each image and taking a screenshot (needs the Claude window visible; otherwise the check waits); runs the independent second look for exceptional deals; confirms price and availability on the ad; then sends the deal email. Writes its own pc route and run records.",
+   "does": "A scheduled task that runs with Cameron's PC linked. Reads Facebook, Cycle Trader, eBay, the nationwide Craigslist searches and Powder7 in the Claude app's browser; reviews the photos of every deal-priced ad from any site, biggest discount first, up to 8 a run (settled caution verdicts wait for a price change or 7 days) by opening each image and taking a screenshot (needs the Claude window visible; otherwise the check waits); runs the independent second look for exceptional deals; confirms price and availability on the ad; then sends the deal email. Writes its own pc route and run records.",
    "code": "collectors/pc.md (scheduled task 'Deal Scout: PC collector' just points to it)",
    "live": {
     "type": "run",
@@ -251,7 +253,7 @@
    "kind": "service",
    "name": "ds.py data helper",
    "summary": "How collectors read and change the data",
-   "does": "A small Python script the collectors run for every read and write: summaries, scoring (the same logic as the page), storing listings, checks, routes and runs. It records each change, and on push it replays them on the newest copy if the other collector pushed first, so nothing gets overwritten.",
+   "does": "A small Python script the collectors run for every read and write: summaries, scoring (the same logic as the page), the work queues (which listings to re-open this run and which need a photo check, in order), storing listings, checks, routes and runs. It records each change, and on push it replays them on the newest copy if the other collector pushed first, so nothing gets overwritten.",
    "code": "tools/ds.py",
    "reads": [
     "dealscout-data (all files)"
@@ -270,7 +272,10 @@
     "push",
     "merge",
     "score",
-    "python"
+    "python",
+    "queue",
+    "refresh",
+    "backlog"
    ]
   },
   {

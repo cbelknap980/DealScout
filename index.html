@@ -112,6 +112,13 @@ dl.terms dd{margin:0;min-width:0;overflow-wrap:anywhere}
 .site.partial{border-color:color-mix(in srgb,var(--warn) 45%,var(--line))}
 .site .sh{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 8px;align-items:baseline}
 .site .sh .st{flex-shrink:0}
+.card .thumb{width:auto;max-width:none;justify-self:stretch;margin:-20px -22px 4px;height:170px;object-fit:cover;border-radius:var(--r) var(--r) 0 0;background:var(--sunk);display:block}
+.card .conf{font-size:13px}
+.sumfold > summary{cursor:pointer;list-style:none;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.sumfold > summary::-webkit-details-marker{display:none}
+.sumfold > summary::before{content:"▸";color:var(--accent)}
+.sumfold[open] > summary::before{content:"▾"}
+.sumfold .sumbody{display:grid;gap:18px;margin-top:16px}
 .card .lbl{font-family:var(--display);font-style:italic;color:var(--warn);font-size:15px}
 .site h3{font-size:19px}
 .site .kind{font-size:13.5px;color:var(--muted)}
@@ -230,6 +237,20 @@ legend{font-family:var(--display);font-size:16px;padding:0 4px;color:var(--head)
 .hw-live-dd{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline}
 
 @media (max-width:640px){
+  .mast .wrap{padding-block:12px 0}
+  .mast-note{display:none}
+  .kicker{font-size:13px}
+  .mast h1{font-size:30px}
+  .navrow{padding-block:10px;flex-wrap:nowrap;flex-direction:column;align-items:stretch;gap:4px}
+  .tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-inline:-4px}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{padding:8px 12px;font-size:15px;white-space:nowrap;flex:none}
+  .status{font-size:12.5px}
+  main .wrap{padding-block:20px 56px}
+  .block{padding:18px 16px}
+  .filters{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .filters input[type=search],.filters .geo{grid-column:1/-1}
+  .filters select{width:100%;min-width:0}
   .row{grid-template-columns:minmax(0,1fr) auto}
   .row .price{grid-row:auto;grid-column:1/-1;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .row select{grid-row:auto;grid-column:2;grid-row-start:2}
@@ -510,13 +531,13 @@ const SITE_DEFAULTS = {
 const HOW = {cloud:"Read from the cloud", pc:"Read by the Claude app on your PC"};
 /* ---------- shared rules: fallbacks below, overridden by the meta/rules document (numbers + display) ---------- */
 const RULES = {
-  dealPctDefault:15, exceptionalPct:35, exceptionalPrivatePct:25, priceFreshHours:24, connectedHours:13,
+  dealPctDefault:15, exceptionalPct:35, exceptionalPrivatePct:25, priceFreshHours:24, connectedHours:13, recheckCheckDays:7,
   defaultMustHave:["fbmarketplace","craigslist","cycletrader","ebay"],
   brandedWords:["rebuilt","salvage","reconstructed","flood","lemon","junk","bonded"]
 };
 let RULES_DOC = null;
 const TABS = ["brief","listings","sites","checks","how"];
-const PAGE_VERSION = "2.0";
+const PAGE_VERSION = "2.1";
 let ARCH = null, archState = "loading";
 const EMPTY = document.getElementById("empty").outerHTML;
 const $ = id => document.getElementById(id);
@@ -593,7 +614,12 @@ function score(l, s){
   const fresh = hoursSince(confirmedAt) <= RULES.priceFreshHours;
   const isDeal = underMarket && underCeiling && reachable && verified && !brandedTitle && checkPassed && fresh;
   const lead = underMarket && underCeiling && reachable && !brandedTitle && !isDeal && !checkFailed;
-  return {pct, ref, cost, isDeal, lead, checkFailed, needLevel, brandedTitle, underMarket, underCeiling, ceiling, inRadius, radius:r, homeDist, fresh};
+  // What a lead waits on (v2.1, same as ds.py score()): a caution verdict is settled until the price changes
+  // after it or it is older than recheckCheckDays; a passed check with an old price only needs a re-open.
+  const chkAt = chk.at || "";
+  const settled = chk.status==="caution" && hoursSince(chkAt) <= RULES.recheckCheckDays*24 && String(l.priceChangedAt||"") <= chkAt;
+  const concern = lead && settled, reconfirm = lead && checkPassed && !fresh, photoWork = lead && !checkPassed && !settled;
+  return {pct, ref, cost, isDeal, lead, concern, reconfirm, photoWork, checkFailed, confirmedAt, needLevel, brandedTitle, underMarket, underCeiling, ceiling, inRadius, radius:r, homeDist, fresh};
 }
 function openOf(s){ return listings.filter(l=>l.searchId===s.id && l.status!=="passed" && !l.gone); }
 
@@ -629,9 +655,12 @@ function fixText(st){
   }
   switch(st.reason){
     case "auth": return r.note || `${st.name} needs a sign-in in the Claude app's browser on your PC.`;
-    case "blocked": return `${st.name} blocked the reader at the last check. It tries again every run.${r.note?" "+r.note:""}`;
+    case "blocked": {
+      const until=new Date(r.pausedUntil||""), paused=!isNaN(until) && until>Date.now();
+      return paused ? `${st.name} blocked the reader, so it's paused until ${until.toLocaleString("en-US",{weekday:"short",hour:"numeric",minute:"2-digit"})}. Web-search results fill in meanwhile; nothing for you to do.`
+                    : `${st.name} blocked the reader at the last check. It tries again next run.`; }
     case "setup": return r.note || "Waiting on a setup step.";
-    case "error": return r.note || "The last read failed. It tries again every run.";
+    case "error": return r.movePc ? `The cloud can't open ${st.name} pages, even from search results, for ${r.refusedStreak||3} runs in a row. Moving it to your PC's browser is waiting on your OK in the build chat.` : (r.note || "The last read failed. It tries again every run.");
     case "stale": { const hrs=isFinite(h)?`${Math.round(h)} h`:"a while"; return r.key==="pc" ? `Nothing read from your PC in ${hrs}. Leave the PC on with the Claude app open.` : `Nothing read in ${hrs}. The collector may have stopped running.`; }
     default: return "Not read yet. The next collector run checks it.";
   }
@@ -651,11 +680,15 @@ function segHtml(){
 function wireSeg(el){ el.querySelectorAll("button[data-id]").forEach(b=>b.onclick=()=>{ selected=b.dataset.id; try{localStorage.setItem("ds.sel",selected)}catch(e){} render(); }); }
 
 /* ---------- Brief ---------- */
+// First photo of the ad, straight from the site. Facebook photo links expire after a few days, so a photo
+// that fails to load just disappears and the card shows text only.
+function thumb(l){ const u=(l.photoUrls||[])[0]; return u&&/^https:\/\//.test(u) ? `<img class="thumb" src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ""; }
+function shortRun(note){ const t=String(note||"").replace(/^rules v[\d.]+:\s*/,""); const m=t.match(/^[^(;.]*/); return (m?m[0]:t).trim().replace(/[,:]$/,""); }
 function renderBrief(){
   const now=new Date();
   $("briefEyebrow").textContent="Brief · "+now.toLocaleString("en-US",{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
-  const rows=[], leadRows=[]; let leads=0;
-  searches.forEach(s=>{ if(s.active===false) return; openOf(s).forEach(l=>{ const sc=score(l,s); if(sc.isDeal) rows.push({l,s,sc}); else if(sc.lead){ leads++; leadRows.push({l,s,sc}); } }); });
+  const rows=[], leadRows=[]; let leads=0, concerns=0;
+  searches.forEach(s=>{ if(s.active===false) return; openOf(s).forEach(l=>{ const sc=score(l,s); if(sc.isDeal) rows.push({l,s,sc}); else if(sc.concern) concerns++; else if(sc.lead){ leads++; leadRows.push({l,s,sc}); } }); });
   leadRows.sort((a,b)=>(b.sc.pct??0)-(a.sc.pct??0));
   rows.sort((a,b)=>(b.sc.pct??0)-(a.sc.pct??0));
   const active=searches.filter(s=>s.active!==false);
@@ -665,20 +698,23 @@ function renderBrief(){
     ? `${rows.length} checked deal${rows.length===1?"":"s"} right now${leads?`, ${leads} more being checked`:""}.`
     : (leads ? `No checked deals yet. ${leads} cheap listing${leads===1?" is":"s are"} being checked.` : (searches.length?"No deals right now. The collectors keep watching.":"Start a search to begin."));
   $("briefLead").textContent = searches.length
-    ? `${active.length} active search${active.length===1?"":"es"} watching ${watching} open listing${watching===1?"":"s"} on ${siteCount} site${siteCount===1?"":"s"}. A listing counts as a deal only after its ad has been read, its photos and seller checked, and its price confirmed on the ad in the last ${RULES.priceFreshHours} hours. Rebuilt and salvage titles never count.`
+    ? `${active.length} active search${active.length===1?"":"es"} watching ${watching} open listing${watching===1?"":"s"} on ${siteCount} site${siteCount===1?"":"s"}.${concerns?` ${concerns} cheap listing${concerns===1?" was":"s were"} checked and ${concerns===1?"has":"have"} concerns; they're on the Listings tab marked caution.`:""} A listing counts as a deal only after its ad has been read, its photos and seller checked, and its price confirmed on the ad in the last ${RULES.priceFreshHours} hours. Rebuilt and salvage titles never count.`
     : "Type what you're hunting for below. The collector picks the sites, writes what to verify for that item, and starts reading ads on its next run.";
   $("dealCards").innerHTML = rows.slice(0,10).map(({l,s,sc},i)=>{
     const d = sc.homeDist==null ? "distance unknown" : `${Math.round(sc.homeDist).toLocaleString("en-US")} mi`;
     return `<a class="card" href="${esc(l.url||"#")}" target="_blank" rel="noopener">
-      <div class="n">${String(i+1).padStart(2,"0")} · ${esc(s.name)}</div>
+      ${thumb(l)}
+      <div class="n">${String(i+1).padStart(2,"0")} · ${esc(s.name)} · ${esc(site(l.source).name)}</div>
       <h3>${esc(l.title)}</h3>
       <div class="price"><span class="amt">${money(l.price)}</span><span class="pill deal">${Math.round(sc.pct*100)}% under</span>${num(l.shipCost)?`<span class="note">+ ${money(l.shipCost)} shipping</span>`:""}</div>
       <p>${l.check?.summary?esc("Checked: "+l.check.summary):""}</p>
       <div class="note">${esc(l.location||"")} · ${sc.inRadius&&sc.homeDist!=null?"near you · ":""}${d}${s.pricing==="per-item"&&l.refPrice?` · fair used ${money(l.refPrice)}`:""}</div>
+      <div class="note conf">Price confirmed on the ad ${esc(ago(sc.confirmedAt))}</div>
     </a>`; }).join("") + leadRows.slice(0, Math.max(0, 8-rows.length)).map(({l,s,sc})=>{
-    const why = l.verified===false ? "the ad hasn't been opened yet" : !sc.fresh ? "its price needs re-confirming" : l.check?.status==="caution" ? "a concern to clear: "+((l.check.flags||[])[0]||"see the listing") : "the photo review and red-flag checks";
+    const why = l.verified===false ? "the ad hasn't been opened yet" : sc.reconfirm ? "its price being re-confirmed on the ad" : l.check?.status==="caution" ? "a re-check of an earlier concern: "+((l.check.flags||[])[0]||"see the listing") : "the photo review and red-flag checks";
     return `<a class="card" href="${esc(l.url||"#")}" target="_blank" rel="noopener">
-      <div class="lbl">Being checked · ${esc(s.name)}</div>
+      ${thumb(l)}
+      <div class="lbl">Being checked · ${esc(s.name)} · ${esc(site(l.source).name)}</div>
       <h3>${esc(l.title)}</h3>
       <div class="price"><span class="amt">${money(l.price)}</span><span class="pill near">${Math.round(sc.pct*100)}% under</span></div>
       <p>Not a deal yet. Waiting on ${esc(why)}.</p>
@@ -697,8 +733,8 @@ function renderBrief(){
   $("searchCols").innerHTML=`
     <div class="col"><dl class="terms">${dl.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl></div>
     <div class="col">
-      <p>${open.length} open listing${open.length===1?"":"s"}; ${open.filter(l=>score(l,s).isDeal).length} checked deal${open.filter(l=>score(l,s).isDeal).length===1?"":"s"}, ${open.filter(l=>score(l,s).lead).length} being checked.</p>
-      <p class="note">${must.length?`${must.filter(x=>x.level!=="down").length} of ${must.length} must-have sites connected${must.some(x=>x.level==="partial")?` (${must.filter(x=>x.level==="partial").map(x=>x.name).join(", ")} only partly)`:""}.`:"Sites get picked on the first run."} ${run?`Last run ${esc(ago(run.at))}: ${esc(run.note||"")}`:"Not run yet."}</p>
+      <p>${open.length} open listing${open.length===1?"":"s"}; ${open.filter(l=>score(l,s).isDeal).length} checked deal${open.filter(l=>score(l,s).isDeal).length===1?"":"s"}, ${open.filter(l=>{const x=score(l,s); return x.lead&&!x.concern;}).length} being checked, ${open.filter(l=>score(l,s).concern).length} with concerns.</p>
+      <p class="note">${must.length?`${must.filter(x=>x.level!=="down").length} of ${must.length} must-have sites connected${must.some(x=>x.level==="partial")?` (${must.filter(x=>x.level==="partial").map(x=>x.name).join(", ")} only partly)`:""}.`:"Sites get picked on the first run."} ${run?`Last run ${esc(ago(run.at))}: ${esc(shortRun(run.note))}. The full note is under Search details on the Listings tab.`:"Not run yet."}</p>
       <div class="row-actions"><button class="btn primary" type="button" id="goListings">Open listings</button><button class="btn" type="button" id="goSites">Sites</button>${canWrite?`<button class="btn" type="button" id="editBrief">Edit search</button>`:""}</div>
     </div>`;
   $("goListings").onclick=()=>setTab("listings"); $("goSites").onclick=()=>setTab("sites");
@@ -763,7 +799,7 @@ const CHECKS_HTML = $("checkCards").innerHTML;
 function applyRulesDoc(doc){
   RULES_DOC = (doc && typeof doc==="object") ? doc : null;
   const n = RULES_DOC?.numbers || {};
-  ["dealPctDefault","exceptionalPct","exceptionalPrivatePct","priceFreshHours","connectedHours"].forEach(k=>{ const v=num(n[k]); if(v!=null) RULES[k]=v; });
+  ["dealPctDefault","exceptionalPct","exceptionalPrivatePct","priceFreshHours","connectedHours","recheckCheckDays"].forEach(k=>{ const v=num(n[k]); if(v!=null) RULES[k]=v; });
   if(Array.isArray(n.defaultMustHave) && n.defaultMustHave.length) RULES.defaultMustHave = n.defaultMustHave.map(String);
   if(Array.isArray(n.brandedWords) && n.brandedWords.length){ try{ BRANDED = brandedRe(n.brandedWords); RULES.brandedWords = n.brandedWords.map(String); }catch(e){} }
 }
@@ -816,11 +852,12 @@ function renderSummary(s){
   const yrs=(s.minYear||s.maxYear)?`${s.minYear||"any"} to ${s.maxYear||"any"}`:"any";
   const rule = s.pricing==="per-item" ? `${thr}% under each model's fair used price` : `${thr}% under ${money(m.value)} (${esc(m.basis)}), so ${m.value?money(m.value*(1-thr/100))+" or less":"once listings come in"}`;
   el.hidden=false;
-  el.innerHTML=`<div class="block-head"><div><span class="section-label">${esc(s.category||"Search")}${s.active===false?" · paused":""}</span><h2 class="block-title">${esc(s.name)}</h2></div>${canWrite?`<button class="btn" id="editSearch" type="button">Edit search</button>`:""}</div>
+  const oneLine = `${s.pricing==="per-item"?`${thr}% under fair used`:`${thr}% under ${money(m.value)}`}${s.maxPrice?` · under ${money(s.maxPrice)}`:""}${s.zip?` · near you within ${esc(s.radiusMi??"any")} mi`:""}${run?` · last run ${esc(ago(run.at))}`:""}`;
+  el.innerHTML=`<details class="sumfold"><summary><span class="section-label">Search details</span> <span class="muted">${oneLine}</span></summary><div class="sumbody"><div class="block-head"><div><span class="section-label">${esc(s.category||"Search")}${s.active===false?" · paused":""}</span><h2 class="block-title">${esc(s.name)}</h2></div>${canWrite?`<button class="btn" id="editSearch" type="button">Edit search</button>`:""}</div>
     <div class="cols">
       <div class="col"><dl class="terms"><dt>Keywords</dt><dd>${esc(s.keywords)}${s.exclude?`<span class="muted"> · not ${esc(s.exclude)}</span>`:""}</dd><dt>Deal rule</dt><dd>${rule}</dd><dt>Ceiling</dt><dd>${s.maxPrice?money(s.maxPrice):"none"}</dd><dt>Years / miles</dt><dd>${yrs} / ${s.maxMiles?miles(s.maxMiles):"any"}</dd></dl></div>
       <div class="col"><dl class="terms"><dt>Area</dt><dd>${s.zip?`within ${esc(s.radiusMi??"any")} mi of ${esc(s.zip)} counts as near you${s.shipOutside?"; farther only if it ships, priced with shipping":""}`:"nationwide"}</dd><dt>Sites</dt><dd>${(s.sources||[]).map(id=>esc(site(id).name)).join(", ")||"picked on the first run"}</dd><dt>Last run</dt><dd>${run?`${esc(ago(run.at))}: ${esc(run.note||"")}`:"not yet"}</dd></dl></div>
-    </div>`;
+    </div></div></details>`;
   const b=$("editSearch"); if(b) b.onclick=()=>openEditor(s);
 }
 function renderSourceFilter(s){
@@ -879,7 +916,7 @@ function renderList(s){
     const opts=["new","watching","contacted","passed"].map(v=>`<option value="${v}"${v===st?" selected":""}>${v[0].toUpperCase()+v.slice(1)}</option>`).join("");
     return `<article class="row${(st==="passed"||l.gone)?" passed":""}">
       <div class="price"><span class="amt">${money(l.price)}</span>${wasHtml}${l.gone?"":pill}</div>
-      <div class="title">${(sc.isDeal&&!l.gone)?'<span class="flag">Deal · </span>':(sc.lead&&!l.gone)?'<span class="away">Check · </span>':(sc.checkFailed&&!l.gone)?'<span style="color:var(--bad);font-weight:600">Likely not legit · </span>':""}${l.url?`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.title)}</a>`:esc(l.title)}</div>
+      <div class="title">${(sc.isDeal&&!l.gone)?'<span class="flag">Deal · </span>':(sc.concern&&!l.gone)?'<span class="away">Has concerns · </span>':(sc.lead&&!l.gone)?'<span class="away">Check · </span>':(sc.checkFailed&&!l.gone)?'<span style="color:var(--bad);font-weight:600">Likely not legit · </span>':""}${l.url?`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.title)}</a>`:esc(l.title)}</div>
       <select class="field" aria-label="Status for ${esc(l.title)}" data-id="${esc(l.id)}" ${canWrite?"":"disabled"}>${opts}</select>
       <div class="meta">${photos}${unv}${tb}${ckLabel}<span>${esc(site(l.source).name)}</span>${l.miles?`<span class="num">${miles(l.miles)}</span>`:""}<span>${esc(l.location||"")}</span>${distTxt}${ship}<span>${esc(l.seller||"")}${l.sellerType?` (${esc(l.sellerType)})`:""}</span>${ref}${change}<span>found ${esc(ago(l.foundAt))}</span>${freshTxt}${ceilingNote}${radiusNote}${lnote}${ckNote}</div>
     </article>`;}).join("")+note;
