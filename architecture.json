@@ -1,6 +1,6 @@
 {
  "title": "Two collectors and the page share one private data repo and one rules record",
- "version": "2.1",
+ "version": "2.2",
  "builtFrom": "index.html + js/github-db.js, collectors/cloud.md and pc.md, tools/ds.py and rules.json v1.3, as of Nov 19",
  "updatedAt": "2026-11-19",
  "columns": [
@@ -340,8 +340,8 @@
    "kind": "page",
    "name": "Deal Scout page",
    "summary": "GitHub Pages site, your token per device",
-   "does": "The page at cbelknap980.github.io/DealScout. It reads the data repo with Cameron's GitHub token, re-checks every minute while open, re-scores every listing in the browser with the rules record, and shows the brief, listings, sites, checks and this diagram.",
-   "code": "index.html (score(), siteStatus(), renderBrief(), renderListings(), renderSites(), renderChecks()); js/github-db.js (data layer)",
+   "does": "The page at cbelknap980.github.io/DealScout. It reads the data repo with Cameron's GitHub token, re-checks every minute while open, and re-scores every listing in the browser with the rules record. It opens on Listings: checked deals as photo cards on top, then every listing with filters for deal state, price, year, miles, distance, site, status and price drops, plus Watch, Contacted and Pass on each row. Sites, Checks and this diagram are the other tabs.",
+   "code": "index.html (score(), siteStatus(), renderListings(), passes(), renderResults(), renderSites(), renderChecks()); js/github-db.js (data layer)",
    "live": {
     "type": "page"
    },
@@ -361,10 +361,14 @@
     "page",
     "github pages",
     "token",
-    "brief",
     "listings",
     "sites",
-    "how it works"
+    "how it works",
+    "filters",
+    "deal state",
+    "watch",
+    "pass",
+    "sort"
    ]
   }
  ],
