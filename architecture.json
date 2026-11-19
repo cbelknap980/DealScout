@@ -1,0 +1,423 @@
+{
+ "title": "Two collectors and the page share one private data repo and one rules record",
+ "version": "2.0",
+ "builtFrom": "index.html + js/github-db.js, collectors/cloud.md and pc.md, tools/ds.py and rules.json v1.2, as of Nov 18",
+ "updatedAt": "2026-11-19T06:00:00Z",
+ "columns": [
+  {
+   "id": "inputs",
+   "label": "Inputs"
+  },
+  {
+   "id": "parts",
+   "label": "Collectors and rules"
+  },
+  {
+   "id": "outputs",
+   "label": "Store and outputs"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "in-pc-sites",
+   "col": "inputs",
+   "order": 1,
+   "kind": "input",
+   "name": "PC-read sites",
+   "summary": "Facebook Marketplace, Cycle Trader, eBay",
+   "does": "These sites block reads from the cloud, so only the PC collector reads them, in the Claude app's browser on Cameron's PC, signed in to Facebook with his own account. Facebook is swept from 11 US cities at 500 miles (skis: Denver, 150 miles); Cycle Trader by make and model; eBay newest first.",
+   "code": "collectors/pc.md, steps 2 to 4b",
+   "live": {
+    "type": "sites",
+    "how": "pc"
+   },
+   "reads": [],
+   "writes": [],
+   "rules": [
+    "Browser conduct: read only; never type a password, message a seller or click anything that writes to an account",
+    "Facebook: at most 30 item pages and about 70 page loads per run",
+    "Never add sortBy to a Facebook search URL"
+   ],
+   "keywords": [
+    "facebook",
+    "fb",
+    "marketplace",
+    "cycle trader",
+    "ebay",
+    "browser",
+    "pc",
+    "signed in"
+   ]
+  },
+  {
+   "id": "in-cloud-sites",
+   "col": "inputs",
+   "order": 2,
+   "kind": "input",
+   "name": "Cloud-read sites",
+   "summary": "Craigslist, Autotrader, PowerSports, MotoHunt, forums, SidelineSwap, Powder7",
+   "does": "Sites whose pages load as text from the cloud. The cloud collector reads them with Claude's own web fetch: results pages first, then each matching ad. No paid scraper is used.",
+   "code": "collectors/cloud.md, step 2 (direct checks)",
+   "live": {
+    "type": "sites",
+    "how": "cloud"
+   },
+   "reads": [],
+   "writes": [],
+   "rules": [
+    "A blocked site pauses with backoff (24 h doubling, up to 7 days)",
+    "A site that only renders in a real browser moves to the PC (how: pc in sites.json)"
+   ],
+   "keywords": [
+    "craigslist",
+    "autotrader",
+    "powersports",
+    "motohunt",
+    "revtero",
+    "forum",
+    "sidelineswap",
+    "powder7",
+    "cloud",
+    "webfetch"
+   ]
+  },
+  {
+   "id": "in-search",
+   "col": "inputs",
+   "order": 3,
+   "kind": "input",
+   "name": "Web search",
+   "summary": "Fallback route and site research",
+   "does": "Claude's web search fills in PC-only sites from search results between PC runs, finds listings on sites with no direct route, and researches which sites carry a new search's item (site plan). A search result never counts as a verified listing until the ad itself is opened.",
+   "code": "collectors/cloud.md, steps 1 and 5",
+   "reads": [],
+   "writes": [],
+   "rules": [
+    "Snippets are stored as unverified and never make a site connected"
+   ],
+   "keywords": [
+    "web search",
+    "fallback",
+    "site plan",
+    "search engine",
+    "snippets"
+   ]
+  },
+  {
+   "id": "in-cameron",
+   "col": "inputs",
+   "order": 4,
+   "kind": "input",
+   "name": "Cameron",
+   "summary": "Quick search, search editor, paste box, listing status",
+   "does": "Cameron adds or edits searches, pastes links from anywhere, and marks listings watching, contacted or passed. The page saves each of these straight to the data repo with his GitHub token.",
+   "code": "index.html: parseQuick(), openEditor(), parseLine(), status select in renderList()",
+   "reads": [],
+   "writes": [
+    "searches.json",
+    "pasted.json",
+    "status.json"
+   ],
+   "rules": [
+    "The page writes only its own files: searches.json, pasted.json, status.json"
+   ],
+   "keywords": [
+    "quick search",
+    "editor",
+    "paste",
+    "status",
+    "watching",
+    "passed",
+    "cameron"
+   ]
+  },
+  {
+   "id": "job-cloud",
+   "col": "parts",
+   "order": 1,
+   "kind": "job",
+   "name": "Cloud collector",
+   "summary": "4x daily, Opus 5.5, web fetch and web search, never emails",
+   "does": "A scheduled task that clones both repos, reads rules.json, then reads every cloud site; sets up quick searches, site plans and what-to-verify notes; reads each ad (check 1); marks deal-priced ads \"Waiting for the PC photo check\"; refreshes prices; writes its own cloud route on each site and one run record per search; pushes through ds.py.",
+   "code": "collectors/cloud.md (scheduled task 'Deal Scout: cloud collector' just points to it)",
+   "live": {
+    "type": "run",
+    "collector": "cloud"
+   },
+   "reads": [
+    "rules.json",
+    "searches.json",
+    "sites.json",
+    "listings/",
+    "pasted.json",
+    "status.json"
+   ],
+   "writes": [
+    "listings/",
+    "runs.json (cloud)",
+    "searches.json (site plans, verifyNotes)",
+    "sites.json: cloud route, new sites"
+   ],
+   "rules": [
+    "All sections of rules.json",
+    "Never reviews photos and never emails: the PC does both"
+   ],
+   "keywords": [
+    "cloud collector",
+    "scheduled task",
+    "site plan",
+    "verify notes",
+    "run",
+    "webfetch"
+   ]
+  },
+  {
+   "id": "job-pc",
+   "col": "parts",
+   "order": 2,
+   "kind": "job",
+   "name": "PC collector",
+   "summary": "4x daily, Opus 5.5, Claude app browser on the PC, sends deal emails",
+   "does": "A scheduled task that runs with Cameron's PC linked. Reads Facebook, Cycle Trader and eBay in the Claude app's browser; reviews the photos of every deal-priced ad from any site by opening each image and taking a screenshot (needs the Claude window visible; otherwise the check waits); runs the independent second look for exceptional deals; confirms price and availability on the ad; then sends the deal email. Writes its own pc route and run records.",
+   "code": "collectors/pc.md (scheduled task 'Deal Scout: PC collector' just points to it)",
+   "live": {
+    "type": "run",
+    "collector": "pc"
+   },
+   "reads": [
+    "rules.json",
+    "searches.json",
+    "sites.json",
+    "listings/",
+    "pasted.json",
+    "status.json",
+    "settings.json"
+   ],
+   "writes": [
+    "listings/ (incl. checks, alertedAt)",
+    "runs.json (pc)",
+    "sites.json: pc route"
+   ],
+   "rules": [
+    "Photo checks happen only here (rules.json: LEGITIMACY CHECK)",
+    "A blank screenshot leaves the check pending; never passed"
+   ],
+   "keywords": [
+    "pc collector",
+    "photos",
+    "screenshot",
+    "facebook",
+    "email",
+    "deal email",
+    "second look"
+   ]
+  },
+  {
+   "id": "rules",
+   "col": "parts",
+   "order": 3,
+   "kind": "rules",
+   "name": "Rules (rules.json)",
+   "summary": "One record both collectors and the page follow",
+   "does": "Deal Scout's shared rules: thresholds and windows in numbers, the rule wording the collectors follow in text, and the Checks tab cards in display. Change a rule once here and every part picks it up on its next run or page load.",
+   "code": "dealscout-data/rules.json; page applyRulesDoc() and renderRules()",
+   "live": {
+    "type": "rules"
+   },
+   "reads": [],
+   "writes": [],
+   "rules": [
+    "Edited only in a build chat, then one test run of each collector",
+    "photoBackup is \"off\": no paid photo service"
+   ],
+   "keywords": [
+    "rules",
+    "numbers",
+    "threshold",
+    "freshness",
+    "checks",
+    "settings"
+   ]
+  },
+  {
+   "id": "ds",
+   "col": "parts",
+   "order": 4,
+   "kind": "service",
+   "name": "ds.py data helper",
+   "summary": "How collectors read and change the data",
+   "does": "A small Python script the collectors run for every read and write: summaries, scoring (the same logic as the page), storing listings, checks, routes and runs. It records each change, and on push it replays them on the newest copy if the other collector pushed first, so nothing gets overwritten.",
+   "code": "tools/ds.py",
+   "reads": [
+    "dealscout-data (all files)"
+   ],
+   "writes": [
+    "dealscout-data (via git push)"
+   ],
+   "rules": [
+    "Collectors never hand-edit JSON or force-push",
+    "Each collector may write only its own route on a site"
+   ],
+   "keywords": [
+    "ds.py",
+    "helper",
+    "git",
+    "push",
+    "merge",
+    "score",
+    "python"
+   ]
+  },
+  {
+   "id": "db",
+   "col": "outputs",
+   "order": 1,
+   "kind": "data",
+   "name": "Data repo (dealscout-data)",
+   "summary": "Private GitHub repo of JSON files",
+   "does": "The only shared state, as plain files with full history: searches.json, listings/<search>.json, sites.json (each with a cloud and a pc route), runs.json, rules.json, settings.json, plus status.json and pasted.json from the page. Every collector run is a commit you can read.",
+   "code": "github.com/cbelknap980/dealscout-data (private)",
+   "live": {
+    "type": "db"
+   },
+   "reads": [],
+   "writes": [],
+   "rules": [
+    "Listing ids are <site>-<site listing id>, which is how duplicates are caught",
+    "status.json and pasted.json are written by the page only"
+   ],
+   "keywords": [
+    "data",
+    "repo",
+    "github",
+    "json",
+    "searches",
+    "listings",
+    "runs",
+    "sites",
+    "history"
+   ]
+  },
+  {
+   "id": "email",
+   "col": "outputs",
+   "order": 2,
+   "kind": "output",
+   "name": "Deal email",
+   "summary": "Checked deals only, from the PC collector",
+   "does": "One email per run listing new deals that passed every required check, with what the check covered and a link to the ad and the page. Site problems are never emailed; they show as the banner on the page.",
+   "code": "Gmail connector; rules.json DEAL EMAILS",
+   "reads": [
+    "settings.json (dealEmailTo)"
+   ],
+   "writes": [],
+   "rules": [
+    "Re-open every ad right before sending; drop anything gone or changed",
+    "Never email a site problem"
+   ],
+   "keywords": [
+    "email",
+    "gmail",
+    "alert",
+    "deal email",
+    "inbox"
+   ]
+  },
+  {
+   "id": "page",
+   "col": "outputs",
+   "order": 3,
+   "kind": "page",
+   "name": "Deal Scout page",
+   "summary": "GitHub Pages site, your token per device",
+   "does": "The page at cbelknap980.github.io/DealScout. It reads the data repo with Cameron's GitHub token, re-checks every minute while open, re-scores every listing in the browser with the rules record, and shows the brief, listings, sites, checks and this diagram.",
+   "code": "index.html (score(), siteStatus(), renderBrief(), renderListings(), renderSites(), renderChecks()); js/github-db.js (data layer)",
+   "live": {
+    "type": "page"
+   },
+   "reads": [
+    "all data files",
+    "architecture.json"
+   ],
+   "writes": [
+    "searches.json",
+    "pasted.json",
+    "status.json"
+   ],
+   "rules": [
+    "The token stays in the browser on each device; it can only reach dealscout-data"
+   ],
+   "keywords": [
+    "page",
+    "github pages",
+    "token",
+    "brief",
+    "listings",
+    "sites",
+    "how it works"
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "from": "in-pc-sites",
+   "to": "job-pc",
+   "label": "read in the PC browser"
+  },
+  {
+   "from": "in-cloud-sites",
+   "to": "job-cloud",
+   "label": "web fetch"
+  },
+  {
+   "from": "in-search",
+   "to": "job-cloud",
+   "label": "results"
+  },
+  {
+   "from": "in-cameron",
+   "to": "page",
+   "label": "uses"
+  },
+  {
+   "from": "rules",
+   "to": "job-cloud",
+   "label": "read every run"
+  },
+  {
+   "from": "rules",
+   "to": "job-pc",
+   "label": "read every run"
+  },
+  {
+   "from": "rules",
+   "to": "page",
+   "label": "read on load"
+  },
+  {
+   "from": "job-cloud",
+   "to": "ds",
+   "label": "listings, runs, cloud route"
+  },
+  {
+   "from": "job-pc",
+   "to": "ds",
+   "label": "listings, checks, runs, pc route"
+  },
+  {
+   "from": "ds",
+   "to": "db",
+   "label": "commits"
+  },
+  {
+   "from": "job-pc",
+   "to": "email",
+   "label": "checked deals"
+  },
+  {
+   "from": "db",
+   "to": "page",
+   "label": "reads; page writes its own files"
+  }
+ ]
+}

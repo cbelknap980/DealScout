@@ -1,0 +1,1291 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<script src="js/github-db.js"></script>
+<title>Deal Scout</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: Cameron's "Beamline" look, light only. A paper page, a hairline masthead with pill tabs, then one column per tab:
+   italic eyebrow, serif headline, a short lead, then cards. Tabs: Brief, Listings, Sites, Checks, How it works. */
+:root{
+  --bg:#f3efe6; --surface:#fbf9f4; --sunk:#eee9de; --line:#e0d9cc;
+  --fg:#222c37; --head:#14263d; --muted:#5d6670;
+  --ink:#14263d; --ink-fg:#f6f2ea; --accent:#ad522b;
+  --good:#2c7548; --good-soft:#e2efe5; --warn:#94600f; --warn-soft:#f5e8cf; --bad:#b3261e; --bad-soft:#f6e0dc;
+  --display:"Source Serif 4", Georgia, "Times New Roman", serif;
+  --body:"Source Sans 3", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --r:10px; --wide:1220px;
+}
+/* One look in every theme: the cream Beamline paper, by Cameron's choice (Nov 1). */
+:root{color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.55}
+h1,h2,h3{margin:0;font-family:var(--display);font-weight:500;color:var(--head);text-wrap:balance}
+p{margin:0}
+a{color:var(--head)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.wrap{max-width:var(--wide);margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* masthead */
+.mast{border-bottom:1px solid var(--line)}
+.mast .wrap{padding-block:22px 0}
+.mast-top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px 48px;align-items:flex-start}
+.kicker{font-size:14.5px;color:var(--muted)}
+.mast h1{font-size:clamp(34px,4.4vw,44px);line-height:1.05;margin-top:2px}
+.mast-note{max-width:430px;color:var(--muted);font-size:14.5px;line-height:1.75;padding-top:8px}
+.navrow{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px;padding-block:18px}
+.tabs{display:flex;flex-wrap:wrap;gap:4px}
+.tab{border:0;background:none;padding:10px 15px;border-radius:999px;font-size:15.5px;color:var(--fg);cursor:pointer}
+.tab:hover{background:var(--sunk)}
+.tab[aria-selected="true"]{background:var(--ink);color:var(--ink-fg);font-weight:600}
+.status{font-size:13.5px;color:var(--muted)}
+
+/* page */
+main .wrap{padding-block:30px 72px}
+.panel{display:grid;gap:26px}
+.intro{display:grid;gap:12px;max-width:860px}
+.eyebrow{font-family:var(--display);font-style:italic;color:var(--accent);font-size:16.5px}
+.headline{font-size:clamp(28px,3.7vw,42px);line-height:1.18}
+.lead{max-width:66ch;font-size:16.5px;line-height:1.78}
+.section-label{font-family:var(--display);font-style:italic;color:var(--accent);font-size:15.5px}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px 22px;display:grid;gap:10px;align-content:start;min-width:0}
+.card .n{font-family:var(--display);color:var(--accent);font-size:16px}
+.card h3{font-size:20px;line-height:1.3}
+.card p,.card .sub{color:var(--muted);font-size:14.5px;line-height:1.72}
+a.card{text-decoration:none;color:inherit}
+a.card:hover{border-color:var(--accent)}
+.card .price{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.card .amt{font-family:var(--mono);font-size:20px;color:var(--head)}
+
+.block{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px 24px;display:grid;gap:18px;min-width:0}
+.block-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px 20px}
+.block-head > div:first-child{display:grid;gap:4px;min-width:0}
+.block-title{font-size:clamp(21px,2.3vw,26px);line-height:1.25}
+.seg{display:flex;flex-wrap:wrap;gap:8px}
+.seg button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:9px 16px;font-weight:600;font-size:14.5px;color:var(--head);cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+.seg button:hover{border-color:var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--ink-fg);border-color:var(--ink)}
+.seg .count{font-family:var(--mono);font-size:12px;opacity:.75}
+.seg .dot{width:7px;height:7px;border-radius:50%;background:var(--good)}
+.seg button.paused{opacity:.6}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:0 28px}
+.col{border-top:1px solid var(--line);padding-top:14px;display:grid;gap:10px;align-content:start;min-width:0}
+dl.terms{display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr);gap:8px 16px;margin:0;font-size:15px}
+dl.terms dt{color:var(--muted)}
+dl.terms dd{margin:0;min-width:0;overflow-wrap:anywhere}
+
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 16px;font-weight:600;font-size:14.5px;color:var(--head);cursor:pointer}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--ink);color:var(--ink-fg);border-color:var(--ink)}
+.btn.danger{color:var(--bad)}
+.btn:disabled{opacity:.5;cursor:default}
+.row-actions{display:flex;flex-wrap:wrap;gap:8px}
+.field{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 11px;min-width:0}
+
+/* status chips */
+.st{font-size:12.5px;font-weight:600;border-radius:999px;padding:2px 10px;white-space:nowrap;justify-self:start}
+.s-ok{background:var(--good-soft);color:var(--good)}
+.s-warn{background:var(--warn-soft);color:var(--warn)}
+.s-bad{background:var(--bad-soft);color:var(--bad)}
+.s-idle{background:var(--sunk);color:var(--muted)}
+
+/* connection bar on the Brief */
+.connbar{display:grid;gap:4px;border-radius:var(--r);padding:12px 16px;font-size:15px;border:1px solid var(--line);background:var(--surface);cursor:pointer}
+.connbar .lead2{font-weight:600}
+.connbar .lead2 small{font-weight:400;color:var(--muted);font-size:13.5px;margin-left:6px}
+.connbar ul{margin:2px 0 0;padding-left:18px;display:grid;gap:3px;font-size:14px}
+.connbar.ok .lead2{color:var(--good)}
+.connbar.warn{background:var(--warn-soft);border-color:color-mix(in srgb,var(--warn) 40%,var(--line))}
+.connbar.warn .lead2{color:var(--warn)}
+.connbar.bad{background:var(--bad-soft);border-color:color-mix(in srgb,var(--bad) 45%,var(--line))}
+.connbar.bad .lead2{color:var(--bad)}
+
+/* site cards */
+.site{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;display:grid;gap:8px;align-content:start;min-width:0}
+.site.down{border-color:color-mix(in srgb,var(--bad) 50%,var(--line))}
+.site.partial{border-color:color-mix(in srgb,var(--warn) 45%,var(--line))}
+.site .sh{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 8px;align-items:baseline}
+.site .sh .st{flex-shrink:0}
+.card .lbl{font-family:var(--display);font-style:italic;color:var(--warn);font-size:15px}
+.site h3{font-size:19px}
+.site .kind{font-size:13.5px;color:var(--muted)}
+.site .must{font-family:var(--display);font-style:italic;color:var(--accent);font-size:14px}
+.site .rt{font-size:13.5px;color:var(--muted);display:grid;gap:2px}
+.site .proof{font-size:14px}
+.site .fix{font-size:14px;border-top:1px solid var(--line);padding-top:8px}
+.table-wrap{overflow-x:auto}
+table.sites{border-collapse:collapse;width:100%;font-size:14.5px;min-width:560px}
+table.sites th{text-align:left;font-weight:600;color:var(--muted);font-size:13px;padding:8px 10px;border-bottom:1px solid var(--line)}
+table.sites td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+.events{display:grid;gap:10px}
+.event{display:grid;grid-template-columns:minmax(0,120px) minmax(0,1fr);gap:4px 16px}
+.event .d{font-family:var(--mono);font-size:14px;color:var(--head)}
+
+/* listings */
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.filters input[type=search]{flex:1 1 220px}
+.check{display:flex;align-items:center;gap:6px;font-weight:600;font-size:14.5px;padding:0 4px}
+.geo{display:flex;align-items:center;gap:6px}
+.geo .zip{width:6.2em}
+.geo .of{color:var(--muted);font-size:14px}
+.geo .zip[aria-invalid="true"]{border-color:var(--bad)}
+.list{display:grid;gap:10px}
+.row{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:grid;grid-template-columns:124px minmax(0,1fr) auto;gap:4px 18px;align-items:center}
+.row.passed{opacity:.55}
+.row .price{grid-row:span 2;display:grid;gap:4px;align-content:center}
+.row .amt{font-family:var(--mono);font-size:19px;color:var(--head)}
+.row .was{font-family:var(--mono);font-size:13px;color:var(--muted);text-decoration:line-through}
+.row .title{min-width:0;font-weight:600;font-size:16px}
+.row .title a{color:var(--head);text-decoration:none;border-bottom:1px solid var(--line)}
+.row .title a:hover{border-color:var(--accent)}
+.row select{grid-row:span 2;align-self:center}
+.meta{min-width:0;font-size:14px;color:var(--muted);display:flex;flex-wrap:wrap;gap:2px 12px}
+.meta .lnote{flex-basis:100%;color:var(--warn)}
+.meta .cnote{flex-basis:100%}
+.meta .cnote.bad{color:var(--bad)}
+.meta .cut{color:var(--good);font-weight:600}
+.meta .up{color:var(--bad);font-weight:600}
+.pill{font-size:12px;font-weight:600;border-radius:999px;padding:1px 9px;font-family:var(--mono);justify-self:start;white-space:nowrap}
+.pill.deal,.pill.ok{background:var(--good-soft);color:var(--good)}
+.pill.near,.pill.unv{background:var(--warn-soft);color:var(--warn)}
+.pill.over{background:var(--sunk);color:var(--muted)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.flag{color:var(--good);font-weight:600}
+.away{color:var(--warn)}
+.photos{color:var(--accent);font-weight:600;text-decoration:none;white-space:nowrap}
+.dist{font-family:var(--mono)}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:var(--r);padding:26px 22px;color:var(--muted)}
+.empty strong{color:var(--head)}
+.note{font-size:14px;color:var(--muted)}
+details.fold{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 20px}
+details.fold summary{cursor:pointer;font-weight:600;color:var(--head);list-style:none}
+details.fold summary::-webkit-details-marker{display:none}
+details.fold summary::before{content:"\25B8";color:var(--muted);margin-right:8px;display:inline-block;transition:transform .15s}
+details.fold[open] summary::before{transform:rotate(90deg)}
+details.fold .body{display:grid;gap:10px;margin-top:12px}
+.paste textarea{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:9px 11px;width:100%;min-height:96px;font-family:var(--mono);font-size:13px}
+.quick{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.quick input{flex:1 1 320px;padding:10px 13px;font-size:16px}
+
+/* editor */
+.overlay{position:fixed;inset:0;background:color-mix(in srgb,var(--fg) 45%,transparent);display:grid;place-items:start center;overflow:auto;z-index:20;
+  padding:calc(24px + env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px))}
+.editor{background:var(--surface);border:1px solid var(--line);border-radius:14px;width:100%;max-width:700px;padding:22px;display:grid;gap:16px}
+.editor h2{font-size:26px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px 16px}
+label.f{display:grid;gap:4px;font-size:14px;font-weight:600;min-width:0}
+label.f span.hint{font-weight:400;color:var(--muted);font-size:12.5px}
+label.f input,label.f textarea,label.f select{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;width:100%;min-width:0}
+fieldset{border:1px solid var(--line);border-radius:var(--r);padding:10px 14px 14px;margin:0}
+legend{font-family:var(--display);font-size:16px;padding:0 4px;color:var(--head)}
+.srcpick{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:6px 14px}
+.srcpick label,.cbx{display:flex;gap:8px;align-items:flex-start;font-size:14.5px}
+.srcpick small{display:block;color:var(--muted);font-size:12px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between}
+.actions .right{display:flex;gap:8px;flex-wrap:wrap}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--ink-fg);padding:9px 16px;border-radius:999px;font-weight:600;z-index:30}
+
+/* how it works: the meta/architecture map. Wide = three columns with an SVG edge overlay; narrow = stacked list. */
+.hw-tools{display:grid;gap:8px;max-width:640px}
+.hw-qlabel{font-family:var(--display);font-style:italic;color:var(--accent);font-size:15.5px}
+.hw-q{width:100%;padding:10px 13px;font-size:16px}
+.hw-count{font-size:14px;color:var(--muted)}
+.hw-host{display:grid;gap:18px;min-width:0}
+.hw-diagram{position:relative;min-width:0}
+.hw-diagram.wide{--hw-gap:clamp(88px,13vw,168px);display:grid;grid-template-columns:repeat(var(--hw-n,3),minmax(0,1fr));column-gap:var(--hw-gap);padding-bottom:28px}
+.hw-diagram.narrow{display:grid;gap:28px}
+.hw-col{position:relative;z-index:1;display:grid;gap:30px;align-content:start;min-width:0}
+.hw-diagram.narrow .hw-col{gap:12px}
+.hw-colhead{font-family:var(--display);font-style:italic;color:var(--accent);font-size:15.5px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.hw-item{display:grid;gap:6px;min-width:0}
+.hw-card{display:grid;gap:5px;width:100%;min-width:0;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;cursor:pointer;color:var(--fg);transition:opacity .15s,border-color .15s}
+.hw-card:hover{border-color:var(--muted)}
+.hw-card.strong{border:2px solid var(--accent);padding:13px 15px}
+.hw-card.sel{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.hw-card.hit{outline:2px solid var(--accent);outline-offset:3px}
+.hw-card.dim{opacity:.35}
+.hw-name{display:block;font-weight:700;color:var(--head);font-size:16px;line-height:1.3;overflow-wrap:anywhere}
+.hw-sum{display:block;color:var(--muted);font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+.hw-live{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;font-size:13px;line-height:1.45;color:var(--fg);border-top:1px solid var(--line);padding-top:7px;margin-top:3px;overflow-wrap:anywhere}
+.hw-badge{font-family:var(--mono);font-size:11.5px;background:var(--sunk);color:var(--muted);border-radius:999px;padding:1px 8px;white-space:nowrap}
+.hw-svg{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:0}
+.hw-svg path.e{fill:none;stroke:var(--muted);stroke-width:1.25;stroke-opacity:.8}
+.hw-svg .ah{fill:var(--muted)}
+.hw-edge,.hw-lbl,.hw-out li{transition:opacity .15s}
+.hw-edge.dim,.hw-lbl.dim,.hw-out li.dim{opacity:.35}
+.hw-lbl{position:absolute;z-index:2;width:max-content;font-size:11.5px;line-height:1.3;color:var(--muted);background:var(--bg);padding:1px 4px;border-radius:4px;text-align:center;pointer-events:none}
+.hw-out{list-style:none;margin:0;padding:0 4px;font-size:13.5px;color:var(--muted);display:grid;gap:2px}
+.hw-panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px 22px;display:grid;gap:14px;min-width:0}
+.hw-does{font-size:15.5px;line-height:1.7;max-width:72ch}
+.hw-list{margin:0;padding-left:18px;display:grid;gap:3px}
+.hw-link{border:0;background:none;padding:0;font:inherit;color:var(--head);font-weight:600;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px;cursor:pointer;text-align:left}
+.hw-link:hover{text-decoration-color:var(--accent)}
+.hw-panel mark{background:var(--warn-soft);color:inherit;border-radius:3px;padding:0 1px}
+.hw-live-dd{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline}
+
+@media (max-width:640px){
+  .row{grid-template-columns:minmax(0,1fr) auto}
+  .row .price{grid-row:auto;grid-column:1/-1;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .row select{grid-row:auto;grid-column:2;grid-row-start:2}
+  .row .title{grid-column:1/2}
+  .meta{grid-column:1/-1}
+  dl.terms{grid-template-columns:minmax(0,1fr)}
+  dl.terms dt{margin-top:6px}
+  .event{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="mast">
+  <div class="wrap">
+    <div class="mast-top">
+      <div>
+        <div class="kicker">Cameron's collector · Front Range, nationwide when it ships</div>
+        <h1>Deal Scout</h1>
+      </div>
+      <p class="mast-note">Saved searches, the sites each one reads, and every listing checked on the ad itself before it counts. Collectors run every six hours from the cloud and from the Claude app on your PC, which also reviews the photos of every deal-priced ad.</p>
+    </div>
+    <div class="navrow">
+      <nav class="tabs" role="tablist" aria-label="Sections">
+        <button class="tab" role="tab" id="tab-brief" data-tab="brief" aria-selected="true">Brief</button>
+        <button class="tab" role="tab" id="tab-listings" data-tab="listings" aria-selected="false">Listings</button>
+        <button class="tab" role="tab" id="tab-sites" data-tab="sites" aria-selected="false">Sites</button>
+        <button class="tab" role="tab" id="tab-checks" data-tab="checks" aria-selected="false">Checks</button>
+        <button class="tab" role="tab" id="tab-how" data-tab="how" aria-selected="false">How it works</button>
+      </nav>
+      <span class="status" id="status">Connecting to your saved searches…</span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+
+    <!-- BRIEF -->
+    <section class="panel" id="p-brief" role="tabpanel" aria-labelledby="tab-brief">
+      <div class="intro">
+        <div class="eyebrow" id="briefEyebrow">Brief</div>
+        <h2 class="headline" id="briefHead">Loading your deals…</h2>
+        <p class="lead" id="briefLead">Deals appear here once a collector has read the ad, checked it, and confirmed the price in the last <span data-rule="priceFreshHours">24</span> hours.</p>
+      </div>
+      <div class="connbar" id="connBar" role="status" hidden></div>
+      <div class="cards" id="dealCards"></div>
+      <section class="block" id="searchBlock" aria-labelledby="searchBlockTitle">
+        <div class="block-head">
+          <div><span class="section-label">Your searches</span><h2 class="block-title" id="searchBlockTitle">What the collectors are hunting.</h2></div>
+          <div class="seg" id="segBrief" role="group" aria-label="Choose a search"></div>
+        </div>
+        <div class="cols" id="searchCols"></div>
+      </section>
+      <section class="block" aria-labelledby="quickTitle">
+        <div class="block-head">
+          <div><span class="section-label">Hunt something new</span><h2 class="block-title" id="quickTitle">One line starts a search.</h2></div>
+        </div>
+        <form class="quick" id="quick" autocomplete="off">
+          <input id="quickText" class="field" placeholder="e.g. Blizzard Brahma 88 with bindings under $350" aria-label="Describe what to hunt for">
+          <button type="submit" class="btn primary" id="quickGo">Start hunting</button>
+          <button type="button" class="btn" id="newSearch">New search with all options</button>
+        </form>
+        <p class="note">Years like 2019+ or 2011-2017, a ceiling like "under $350" and words like "no parts" are picked up; the rest becomes the keywords. On its first run the collector picks the sites for the item, writes what to verify, and decides how to price it.</p>
+      </section>
+    </section>
+
+    <!-- LISTINGS -->
+    <section class="panel" id="p-listings" role="tabpanel" aria-labelledby="tab-listings" hidden>
+      <div class="intro">
+        <div class="eyebrow" id="listEyebrow">Listings</div>
+        <h2 class="headline" id="listHead">Listings</h2>
+      </div>
+      <div class="seg" id="segListings" role="group" aria-label="Choose a search"></div>
+      <section class="block" id="summary" hidden></section>
+      <details class="fold paste" id="paste" hidden>
+        <summary>Add listings by hand</summary>
+        <div class="body">
+          <p class="note">Paste links or text from anywhere: Grok, a forum, a text from a friend, a Marketplace link from your phone. One listing per line. The collector reads each ad and fills in the rest on its next run.</p>
+          <textarea id="pasteText" placeholder="https://www.facebook.com/marketplace/item/123456789/ Blizzard Brahma 88 177cm $300"></textarea>
+          <div class="row-actions" style="justify-content:space-between;align-items:center"><span class="note" id="pasteNote"></span><button type="button" class="btn primary" id="pasteGo">Add to this search</button></div>
+        </div>
+      </details>
+      <section class="filters" id="filters" hidden>
+        <input type="search" id="q" class="field" placeholder="Search listings: title, location, seller">
+        <span class="geo">
+          <select id="fradius" class="field" aria-label="Search radius">
+            <option value="25">Within 25 mi</option>
+            <option value="50">Within 50 mi</option>
+            <option value="100">Within 100 mi</option>
+            <option value="250">Within 250 mi</option>
+            <option value="500">Within 500 mi</option>
+            <option value="1000">Within 1,000 mi</option>
+            <option value="any">Any distance</option>
+          </select>
+          <span class="of">of</span>
+          <input id="fzip" class="field zip num" inputmode="numeric" maxlength="5" autocomplete="postal-code" aria-label="ZIP code to measure from" placeholder="ZIP">
+        </span>
+        <select id="fsource" class="field" aria-label="Site"></select>
+        <select id="fstatus" class="field" aria-label="Status">
+          <option value="open">New, watching, contacted</option>
+          <option value="all">All, including passed and gone</option>
+          <option value="new">New</option>
+          <option value="watching">Watching</option>
+          <option value="contacted">Contacted</option>
+          <option value="passed">Passed</option>
+        </select>
+        <select id="fsort" class="field" aria-label="Sort">
+          <option value="deal">Best deal first</option>
+          <option value="price">Lowest price</option>
+          <option value="new">Newest found</option>
+          <option value="near">Closest first</option>
+          <option value="year">Newest year</option>
+          <option value="miles">Lowest miles</option>
+        </select>
+        <label class="check"><input type="checkbox" id="fdeals"> Deals only</label>
+      </section>
+      <section class="list" id="list">
+        <div class="empty" id="empty"><strong>No saved searches yet.</strong><br>Start one from the Brief tab. The collector picks it up on its next run and listings land here.</div>
+      </section>
+    </section>
+
+    <!-- SITES -->
+    <section class="panel" id="p-sites" role="tabpanel" aria-labelledby="tab-sites" hidden>
+      <div class="intro">
+        <div class="eyebrow" id="sitesEyebrow">Sites</div>
+        <h2 class="headline" id="sitesHead">Which sites each search reads.</h2>
+        <p class="lead" id="sitesLead"></p>
+      </div>
+      <div class="seg" id="segSites" role="group" aria-label="Choose a search"></div>
+      <div class="cards" id="siteCards"></div>
+      <section class="block" id="eventsBlock" hidden aria-labelledby="eventsTitle">
+        <div class="block-head"><div><span class="section-label">In person</span><h2 class="block-title" id="eventsTitle">Swaps and sales coming up.</h2></div></div>
+        <div class="events" id="eventsList"></div>
+      </section>
+      <section class="block" aria-labelledby="allSitesTitle">
+        <div class="block-head">
+          <div><span class="section-label">Every site</span><h2 class="block-title" id="allSitesTitle">All sites Deal Scout knows.</h2></div>
+          <span class="note" id="connBeat"></span>
+        </div>
+        <div class="table-wrap"><table class="sites" id="allSites"></table></div>
+        <p class="note">A site counts as connected only when a collector read it successfully in the last <span data-rule="connectedHours">13</span> hours, so a stopped collector or a PC that's off shows up here on its own.</p>
+      </section>
+    </section>
+
+    <!-- CHECKS -->
+    <section class="panel" id="p-checks" role="tabpanel" aria-labelledby="tab-checks" hidden>
+      <div class="intro">
+        <div class="eyebrow">Checks · the standard every search follows</div>
+        <h2 class="headline">Nothing counts until the ad itself has been read, and the cheaper it looks the harder it's checked.</h2>
+        <p class="lead">Every search runs the same sequence, whatever the item. Search results, alert emails and pasted links only point at an ad; the ad is what gets checked.</p>
+        <p class="note" id="rulesVer" hidden></p>
+      </div>
+      <div class="cards" id="checkCards">
+        <div class="card"><div class="n">01</div><h3>Read the ad itself</h3><p>Every listing is opened before it's shown: price, condition, title or paperwork, seller and availability come from the live ad. Until then it's marked unverified.</p></div>
+        <div class="card"><div class="n">02</div><h3>Keep the price current</h3><p>Open listings are reopened at least twice a day. Price cuts, sold ads and changed details are recorded, and a deal needs its price confirmed within 24 hours.</p></div>
+        <div class="card"><div class="n">03</div><h3>Photos and red flags</h3><p>Anything priced like a deal gets every photo reviewed, a scan for scam language, a search for the same ad elsewhere, and a VIN or serial check against the item's own format.</p></div>
+        <div class="card"><div class="n">04</div><h3>A second look when it's very cheap</h3><p>35% or more under, or 25% under from a private seller: an independent review that hasn't seen the first verdict, then the ad is reopened. Both have to pass.</p></div>
+        <div class="card"><div class="n">05</div><h3>Once more before any email</h3><p>Right before a deal email goes out, each ad is reopened to confirm it's still listed at that price. Sold or changed ads are dropped or re-scored.</p></div>
+      </div>
+      <section class="block" aria-labelledby="verifyTitle">
+        <div class="block-head">
+          <div><span class="section-label">What to verify</span><h2 class="block-title" id="verifyTitle">Each search carries its own checklist.</h2></div>
+          <div class="seg" id="segChecks" role="group" aria-label="Choose a search"></div>
+        </div>
+        <div class="cols" id="verifyCols"></div>
+      </section>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section class="panel" id="p-how" role="tabpanel" aria-labelledby="tab-how" hidden>
+      <p class="note" id="hwMsg">Loading the architecture record…</p>
+      <div class="intro" id="hwIntro" hidden>
+        <div class="eyebrow">How it works</div>
+        <h2 class="headline" id="hwTitle"></h2>
+        <p class="note" id="hwMeta"></p>
+      </div>
+      <div class="hw-tools" id="hwTools" hidden>
+        <label class="hw-qlabel" for="hwQ">Search the map</label>
+        <input type="search" id="hwQ" class="field hw-q" placeholder="Search parts, sites, rules… e.g. facebook, freshness, new deals" autocomplete="off">
+        <p class="hw-count" id="hwCount" aria-live="polite" hidden></p>
+      </div>
+      <div class="hw-host" id="hwHost" hidden></div>
+    </section>
+
+  </div>
+</main>
+
+<div class="overlay" id="overlay" hidden>
+  <form class="editor" id="editor" autocomplete="off">
+    <h2 id="edTitle">New search</h2>
+    <div class="grid2">
+      <label class="f">Name<input id="e_name" required placeholder="Used skis"></label>
+      <label class="f">Keywords<span class="hint">What a matching title contains</span><input id="e_keywords" required placeholder="skis with bindings"></label>
+      <label class="f">Exclude words<span class="hint">Comma separated</span><input id="e_exclude" placeholder="kids, junior, boots only"></label>
+      <label class="f">Category<input id="e_category" placeholder="Skis"></label>
+    </div>
+    <fieldset>
+      <legend>Deal rule</legend>
+      <div class="grid2">
+        <label class="f">How to judge price
+          <select id="e_pricing">
+            <option value="median">Against the median of this search's listings</option>
+            <option value="per-item">Each listing against its own model's fair used price</option>
+          </select>
+          <span class="hint">Use "each listing" when a search mixes many models, like skis</span>
+        </label>
+        <label class="f">Deal threshold (% under)<input id="e_dealPct" type="number" min="0" max="90" step="1" value="15"></label>
+        <label class="f">Price ceiling ($)<span class="hint">Hard max. Blank for none</span><input id="e_maxPrice" type="number" min="0" step="10"></label>
+        <label class="f">Market price ($)<span class="hint">Optional override for median pricing</span><input id="e_marketPrice" type="number" min="0" step="10"></label>
+        <label class="f">Rebuilt or salvage titles<select id="e_branded"><option value="false">Never count as deals</option><option value="true">Count as deals</option></select></label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Item filters</legend>
+      <div class="grid2">
+        <label class="f">Min year<input id="e_minYear" type="number" min="1900" max="2100"></label>
+        <label class="f">Max year<input id="e_maxYear" type="number" min="1900" max="2100"></label>
+        <label class="f">Max miles<input id="e_maxMiles" type="number" min="0" step="500"></label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Where</legend>
+      <div class="grid2">
+        <label class="f">Home ZIP<span class="hint">Distance is measured from here</span><input id="e_zip" inputmode="numeric" maxlength="5"></label>
+        <label class="f">Near-you radius (miles)<input id="e_radius" type="number" min="0" step="25"></label>
+        <label class="f">Local areas<span class="hint">Craigslist areas, comma separated</span><input id="e_areas" placeholder="denver, boulder, cosprings"></label>
+      </div>
+      <label class="cbx" style="margin-top:12px"><input type="checkbox" id="e_shipOutside"><span>Outside the radius, keep only listings that ship, judged on price plus shipping</span></label>
+      <label class="f" style="margin-top:12px">Extra pages to check<span class="hint">One URL per line, e.g. a forum's for-sale section</span><textarea id="e_extra" rows="2"></textarea></label>
+    </fieldset>
+    <fieldset>
+      <legend>Sites</legend>
+      <label class="cbx" style="margin-bottom:10px"><input type="checkbox" id="e_autoSites"><span>Let the collector choose and update sites for this item</span></label>
+      <div class="srcpick" id="e_sources"></div>
+    </fieldset>
+    <div class="grid2">
+      <label class="f">Email alerts
+        <select id="e_alerts">
+          <option value="deals">Email deals as found</option>
+          <option value="digest">Daily digest of everything new</option>
+          <option value="off">No email</option>
+        </select>
+      </label>
+      <label class="f">Status
+        <select id="e_active">
+          <option value="true">Active</option>
+          <option value="false">Paused</option>
+        </select>
+      </label>
+    </div>
+    <label class="f">Notes for the collector<span class="hint">Anything that decides a match, e.g. which models count</span><textarea id="e_notes" rows="3"></textarea></label>
+    <div class="actions">
+      <button type="button" class="btn danger" id="e_delete" hidden>Delete search</button>
+      <div class="right">
+        <button type="button" class="btn" id="e_cancel">Cancel</button>
+        <button type="submit" class="btn primary" id="e_save">Save search</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+/* ---------- sites: built-in defaults, extended and overridden by sources/<id> documents the collectors write ---------- */
+const SITE_DEFAULTS = {
+  craigslist:{name:"Craigslist", how:"cloud", kind:"Classifieds", home:"https://www.craigslist.org", local:true},
+  fbmarketplace:{name:"Facebook Marketplace", how:"pc", kind:"Marketplace", home:"https://www.facebook.com/marketplace", local:true},
+  cycletrader:{name:"Cycle Trader", how:"pc", kind:"Dealer and private listings", home:"https://www.cycletrader.com"},
+  ebay:{name:"eBay", how:"pc", kind:"Marketplace", home:"https://www.ebay.com", ships:true},
+  autotrader:{name:"Autotrader Motorcycles", how:"cloud", kind:"Dealer listings", home:"https://motorcycles.autotrader.com"},
+  powersports:{name:"PowerSports.com", how:"cloud", kind:"Dealer listings", home:"https://www.powersports.com"},
+  motohunt:{name:"MotoHunt", how:"cloud", kind:"Dealer listings", home:"https://motohunt.com"},
+  revtero:{name:"Revtero", how:"cloud", kind:"Dealer listings", home:"https://revtero.com"},
+  pages:{name:"Extra pages", how:"cloud", kind:"Forums and pages you added"},
+  other:{name:"Other sites", how:"cloud", kind:"Found by web search"}
+};
+const HOW = {cloud:"Read from the cloud", pc:"Read by the Claude app on your PC"};
+/* ---------- shared rules: fallbacks below, overridden by the meta/rules document (numbers + display) ---------- */
+const RULES = {
+  dealPctDefault:15, exceptionalPct:35, exceptionalPrivatePct:25, priceFreshHours:24, connectedHours:13,
+  defaultMustHave:["fbmarketplace","craigslist","cycletrader","ebay"],
+  brandedWords:["rebuilt","salvage","reconstructed","flood","lemon","junk","bonded"]
+};
+let RULES_DOC = null;
+const TABS = ["brief","listings","sites","checks","how"];
+const PAGE_VERSION = "2.0";
+let ARCH = null, archState = "loading";
+const EMPTY = document.getElementById("empty").outerHTML;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = n => (n==null||n===""||isNaN(n)) ? "—" : "$" + Math.round(Number(n)).toLocaleString("en-US");
+const miles = n => (n==null||n===""||isNaN(n)) ? "" : Math.round(Number(n)).toLocaleString("en-US") + " mi";
+const num = v => (v===""||v==null||isNaN(Number(v))) ? null : Number(v);
+
+let db = null, canWrite = true;
+let searches = [], listings = [], runs = [], health = [], healthLoaded = false;
+let selected = null, editingId = null, tab = "brief";
+let MK = new Map();
+try { selected = localStorage.getItem("ds.sel"); } catch(e) {}
+
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>t.hidden=true,2400); }
+function ago(iso){ if(!iso) return ""; const d=(Date.now()-new Date(iso).getTime())/60000; if(isNaN(d)) return ""; if(d<60) return Math.max(1,Math.round(d))+" min ago"; if(d<1440) return Math.round(d/60)+" h ago"; return Math.round(d/1440)+" d ago"; }
+function hoursSince(iso){ const t=new Date(iso||"").getTime(); return isNaN(t)?Infinity:(Date.now()-t)/36e5; }
+function site(id){ const d=health.find(h=>h.id===id)||{}; const b=SITE_DEFAULTS[id]||{}; return {id, name:d.name||b.name||id, how:d.how||b.how||"cloud", kind:d.kind||b.kind||"", home:d.home||b.home||"", ships:d.ships??b.ships??null, local:d.local??b.local??null}; }
+function allSiteIds(){ return [...new Set([...Object.keys(SITE_DEFAULTS), ...health.map(h=>h.id), ...searches.flatMap(s=>s.sources||[])])]; }
+function mustFor(s){ const src=s.sources||[]; const m=(Array.isArray(s.mustHave)&&s.mustHave.length)?s.mustHave:RULES.defaultMustHave; return m.filter(id=>src.includes(id)); }
+function current(){ return searches.find(x=>x.id===selected) || null; }
+
+/* ---------- pricing ---------- */
+function median(arr){ if(!arr.length) return null; const a=[...arr].sort((x,y)=>x-y); const m=Math.floor(a.length/2); return a.length%2?a[m]:(a[m-1]+a[m])/2; }
+const brandedRe = words => new RegExp("\\b(" + words.map(w=>String(w).replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|") + ")\\b", "i");
+let BRANDED = brandedRe(RULES.brandedWords);
+function branded(l){ if(l.titleStatus) return !/^clean$/i.test(l.titleStatus); return BRANDED.test(String(l.title||"")); }
+function marketFor(s){
+  if(s.pricing==="per-item") return {value:null, perItem:true, basis:"each listing against its own model's fair used price"};
+  const set=num(s.marketPrice); if(set) return {value:set, basis:"set by you"};
+  const prices=listings.filter(l=>l.searchId===s.id && l.status!=="passed" && !l.gone && !branded(l) && l.check?.status!=="failed" && num(l.price)).map(l=>Number(l.price));
+  const m=median(prices);
+  return m ? {value:m, basis:`median of ${prices.length} listing${prices.length===1?"":"s"}`} : {value:null, basis:"no listings yet"};
+}
+function refreshMarkets(){ MK=new Map(searches.map(s=>[s.id, marketFor(s)])); }
+
+let GEO=null, view={zip:"",radius:"any"}, viewFor=null;
+fetch("geo.json").then(r=>r.ok?r.json():null).then(g=>{ if(g){ GEO=g; render(); } }).catch(()=>{});
+function zipCoords(z){ return (GEO && /^\d{5}$/.test(String(z||""))) ? (GEO.z[String(z)]||null) : null; }
+function coordsFor(l){
+  if(typeof l.lat==="number" && typeof l.lng==="number") return [l.lat,l.lng];
+  if(!GEO) return null;
+  const zm=String(l.zip||"").match(/\d{5}/)||String(l.location||"").match(/\b(\d{5})\b/);
+  if(zm){ const c=GEO.z[zm[1]||zm[0]]; if(c) return c; }
+  const cm=String(l.location||"").match(/^\s*([^,]+?),\s*([A-Za-z]{2})\b/);
+  if(cm){ const c=GEO.c[cm[1].trim().toLowerCase().replace(/\s+/g," ")+"|"+cm[2].toUpperCase()]; if(c) return c; }
+  return null;
+}
+function milesBetween(a,b){ if(!a||!b) return null; const R=3958.8, rad=x=>x*Math.PI/180; const dLa=rad(b[0]-a[0]), dLo=rad(b[1]-a[1]); const h=Math.sin(dLa/2)**2+Math.cos(rad(a[0]))*Math.cos(rad(b[0]))*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
+
+function score(l, s){
+  const m = MK.get(s.id) || marketFor(s);
+  const ref = s.pricing==="per-item" ? num(l.refPrice) : m.value;
+  const price = num(l.price);
+  const cost = price==null ? null : price + (num(l.shipCost)||0);
+  const pct = (ref && cost!=null) ? (ref - cost) / ref : null;
+  const thr = (num(s.dealPct) ?? RULES.dealPctDefault) / 100;
+  const ceiling = num(s.maxPrice);
+  const underMarket = pct!=null && pct >= thr;
+  const underCeiling = ceiling==null ? true : (cost!=null && cost <= ceiling);
+  const r = num(s.radiusMi);
+  let homeDist = milesBetween(zipCoords(s.zip), coordsFor(l));
+  if(homeDist==null && typeof l.distanceMi==="number") homeDist = l.distanceMi;
+  const inRadius = (r==null || !s.zip) ? true : (homeDist!=null && homeDist <= r);
+  const reachable = !(s.shipOutside && r!=null && homeDist!=null && homeDist > r && l.ships===false);
+  const brandedTitle = branded(l) && s.allowBranded!==true;
+  const verified = l.verified!==false;
+  const chk = l.check || {};
+  const exceptional = pct!=null && (pct >= RULES.exceptionalPct/100 || (pct >= RULES.exceptionalPrivatePct/100 && l.sellerType==="private"));
+  const needLevel = exceptional ? 3 : 2;
+  const checkPassed = chk.status==="passed" && Number(chk.level||0) >= needLevel;
+  const checkFailed = chk.status==="failed";
+  const confirmedAt = [l.lastChecked, l.lastSeen, chk.at].filter(Boolean).sort().pop();
+  const fresh = hoursSince(confirmedAt) <= RULES.priceFreshHours;
+  const isDeal = underMarket && underCeiling && reachable && verified && !brandedTitle && checkPassed && fresh;
+  const lead = underMarket && underCeiling && reachable && !brandedTitle && !isDeal && !checkFailed;
+  return {pct, ref, cost, isDeal, lead, checkFailed, needLevel, brandedTitle, underMarket, underCeiling, ceiling, inRadius, radius:r, homeDist, fresh};
+}
+function openOf(s){ return listings.filter(l=>l.searchId===s.id && l.status!=="passed" && !l.gone); }
+
+/* ---------- site connections ---------- */
+const ROUTE_NAME = {pc:"Your PC", cloud:"Cloud", legacy:"Collector"};
+const ROUTE_STATE = {ok:"read OK", partial:"partly read", auth:"needs sign-in", blocked:"blocked", error:"failed", setup:"needs setup"};
+const LEGACY = {ok:"ok", degraded:"partial", stale:"error", blocked:"blocked", setup:"setup", paused:"error"};
+const LEVEL = {ok:["Connected","s-ok"], partial:["Partly connected","s-warn"], down:["Not connected","s-bad"], never:["Not checked yet","s-idle"]};
+function routesOf(d){
+  const out=[];
+  ["pc","cloud"].forEach(k=>{ const r=d[k]; if(r && typeof r==="object" && r.state) out.push({key:k,...r}); });
+  if(!out.length && d.state && LEGACY[d.state]) out.push({key:"legacy", state:LEGACY[d.state], at:d.lastCheck, lastOk:d.lastOk, note:d.note, count:d.lastCount});
+  return out.filter(r=>r.state!=="off");
+}
+function siteStatus(id){
+  const d=health.find(h=>h.id===id)||{id}; const routes=routesOf(d);
+  const fresh=routes.filter(r=>hoursSince(r.at)<=RULES.connectedHours);
+  let level="down", reason=null, route=null;
+  if((route=fresh.find(r=>r.state==="ok"))) level="ok";
+  else if((route=fresh.find(r=>r.state==="partial"))) level="partial";
+  else if((route=fresh.find(r=>["auth","blocked","error","setup"].includes(r.state)))) reason=route.state;
+  else if(routes.length){ reason="stale"; route=[...routes].sort((a,b)=>String(b.at||"").localeCompare(String(a.at||"")))[0]; }
+  else { reason="never"; }
+  return {id, name:site(id).name, d, routes, level, reason, route:route||{}};
+}
+function levelOf(st){ return st.reason==="never" ? LEVEL.never : LEVEL[st.level]; }
+function fixText(st){
+  const r=st.route, h=hoursSince(r.at);
+  if(st.level==="ok") return "";
+  if(st.level==="partial"){
+    if(st.id==="fbmarketplace" && r.loggedIn===false) return "Signed out on your PC. Searches and ads still read, but seller profiles are limited. To fix: on your PC, press Ctrl+Shift+B in the Claude app and sign in to Facebook.";
+    return r.note || "Only partly readable right now.";
+  }
+  switch(st.reason){
+    case "auth": return r.note || `${st.name} needs a sign-in in the Claude app's browser on your PC.`;
+    case "blocked": return `${st.name} blocked the reader at the last check. It tries again every run.${r.note?" "+r.note:""}`;
+    case "setup": return r.note || "Waiting on a setup step.";
+    case "error": return r.note || "The last read failed. It tries again every run.";
+    case "stale": { const hrs=isFinite(h)?`${Math.round(h)} h`:"a while"; return r.key==="pc" ? `Nothing read from your PC in ${hrs}. Leave the PC on with the Claude app open.` : `Nothing read in ${hrs}. The collector may have stopped running.`; }
+    default: return "Not read yet. The next collector run checks it.";
+  }
+}
+function routeLine(r){ const b=[`${ROUTE_NAME[r.key]||r.key}: ${ROUTE_STATE[r.state]||r.state}`]; if(r.loggedIn===true) b.push("signed in"); else if(r.loggedIn===false) b.push("signed out"); if(r.at) b.push(ago(r.at)); return b.join(" · "); }
+function lastRunBy(c){ return runs.find(r=>r.collector===c) || null; }
+function lastRunFor(id){ return runs.find(r=>r.searchId===id) || null; }
+
+/* ---------- shared search toggle ---------- */
+function segHtml(){
+  return searches.map(s=>{
+    const deals=openOf(s).filter(l=>score(l,s).isDeal).length;
+    const total=listings.filter(l=>l.searchId===s.id && !l.gone).length;
+    return `<button type="button" data-id="${esc(s.id)}" aria-pressed="${s.id===selected}" class="${s.active===false?"paused":""}">${deals?'<span class="dot" title="Has checked deals"></span>':""}${esc(s.name||"Untitled")}<span class="count">${total}</span></button>`;
+  }).join("");
+}
+function wireSeg(el){ el.querySelectorAll("button[data-id]").forEach(b=>b.onclick=()=>{ selected=b.dataset.id; try{localStorage.setItem("ds.sel",selected)}catch(e){} render(); }); }
+
+/* ---------- Brief ---------- */
+function renderBrief(){
+  const now=new Date();
+  $("briefEyebrow").textContent="Brief · "+now.toLocaleString("en-US",{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+  const rows=[], leadRows=[]; let leads=0;
+  searches.forEach(s=>{ if(s.active===false) return; openOf(s).forEach(l=>{ const sc=score(l,s); if(sc.isDeal) rows.push({l,s,sc}); else if(sc.lead){ leads++; leadRows.push({l,s,sc}); } }); });
+  leadRows.sort((a,b)=>(b.sc.pct??0)-(a.sc.pct??0));
+  rows.sort((a,b)=>(b.sc.pct??0)-(a.sc.pct??0));
+  const active=searches.filter(s=>s.active!==false);
+  const siteCount=new Set(active.flatMap(s=>s.sources||[])).size;
+  const watching=active.reduce((n,s)=>n+openOf(s).length,0);
+  $("briefHead").textContent = rows.length
+    ? `${rows.length} checked deal${rows.length===1?"":"s"} right now${leads?`, ${leads} more being checked`:""}.`
+    : (leads ? `No checked deals yet. ${leads} cheap listing${leads===1?" is":"s are"} being checked.` : (searches.length?"No deals right now. The collectors keep watching.":"Start a search to begin."));
+  $("briefLead").textContent = searches.length
+    ? `${active.length} active search${active.length===1?"":"es"} watching ${watching} open listing${watching===1?"":"s"} on ${siteCount} site${siteCount===1?"":"s"}. A listing counts as a deal only after its ad has been read, its photos and seller checked, and its price confirmed on the ad in the last ${RULES.priceFreshHours} hours. Rebuilt and salvage titles never count.`
+    : "Type what you're hunting for below. The collector picks the sites, writes what to verify for that item, and starts reading ads on its next run.";
+  $("dealCards").innerHTML = rows.slice(0,10).map(({l,s,sc},i)=>{
+    const d = sc.homeDist==null ? "distance unknown" : `${Math.round(sc.homeDist).toLocaleString("en-US")} mi`;
+    return `<a class="card" href="${esc(l.url||"#")}" target="_blank" rel="noopener">
+      <div class="n">${String(i+1).padStart(2,"0")} · ${esc(s.name)}</div>
+      <h3>${esc(l.title)}</h3>
+      <div class="price"><span class="amt">${money(l.price)}</span><span class="pill deal">${Math.round(sc.pct*100)}% under</span>${num(l.shipCost)?`<span class="note">+ ${money(l.shipCost)} shipping</span>`:""}</div>
+      <p>${l.check?.summary?esc("Checked: "+l.check.summary):""}</p>
+      <div class="note">${esc(l.location||"")} · ${sc.inRadius&&sc.homeDist!=null?"near you · ":""}${d}${s.pricing==="per-item"&&l.refPrice?` · fair used ${money(l.refPrice)}`:""}</div>
+    </a>`; }).join("") + leadRows.slice(0, Math.max(0, 8-rows.length)).map(({l,s,sc})=>{
+    const why = l.verified===false ? "the ad hasn't been opened yet" : !sc.fresh ? "its price needs re-confirming" : l.check?.status==="caution" ? "a concern to clear: "+((l.check.flags||[])[0]||"see the listing") : "the photo review and red-flag checks";
+    return `<a class="card" href="${esc(l.url||"#")}" target="_blank" rel="noopener">
+      <div class="lbl">Being checked · ${esc(s.name)}</div>
+      <h3>${esc(l.title)}</h3>
+      <div class="price"><span class="amt">${money(l.price)}</span><span class="pill near">${Math.round(sc.pct*100)}% under</span></div>
+      <p>Not a deal yet. Waiting on ${esc(why)}.</p>
+      <div class="note">${esc(l.location||"")}${sc.homeDist!=null?" · "+Math.round(sc.homeDist).toLocaleString("en-US")+" mi":""}</div>
+    </a>`; }).join("");
+  // search block
+  const s=current();
+  $("segBrief").innerHTML=segHtml(); wireSeg($("segBrief"));
+  if(!s){ $("searchCols").innerHTML=`<div class="col"><p class="muted">No searches yet.</p></div>`; return; }
+  const m=MK.get(s.id)||marketFor(s), run=lastRunFor(s.id), open=openOf(s);
+  const must=mustFor(s).map(siteStatus); const okMust=must.filter(x=>x.level==="ok").length;
+  const dl=[["Looking for",esc(s.keywords)+(s.exclude?`<span class="muted"> · not ${esc(s.exclude)}</span>`:"")],
+    ["Deal rule", s.pricing==="per-item" ? `${num(s.dealPct)??RULES.dealPctDefault}% under each model's fair used price` : `${num(s.dealPct)??RULES.dealPctDefault}% under ${money(m.value)} <span class="muted">(${esc(m.basis)})</span>`],
+    ["Ceiling", s.maxPrice?money(s.maxPrice):"none"],
+    ["Area", s.zip ? `near you = within ${esc(s.radiusMi??"any")} mi of ${esc(s.zip)}${s.shipOutside?"; farther only if it ships":"; deals anywhere in the US"}` : "nationwide"]];
+  $("searchCols").innerHTML=`
+    <div class="col"><dl class="terms">${dl.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl></div>
+    <div class="col">
+      <p>${open.length} open listing${open.length===1?"":"s"}; ${open.filter(l=>score(l,s).isDeal).length} checked deal${open.filter(l=>score(l,s).isDeal).length===1?"":"s"}, ${open.filter(l=>score(l,s).lead).length} being checked.</p>
+      <p class="note">${must.length?`${must.filter(x=>x.level!=="down").length} of ${must.length} must-have sites connected${must.some(x=>x.level==="partial")?` (${must.filter(x=>x.level==="partial").map(x=>x.name).join(", ")} only partly)`:""}.`:"Sites get picked on the first run."} ${run?`Last run ${esc(ago(run.at))}: ${esc(run.note||"")}`:"Not run yet."}</p>
+      <div class="row-actions"><button class="btn primary" type="button" id="goListings">Open listings</button><button class="btn" type="button" id="goSites">Sites</button>${canWrite?`<button class="btn" type="button" id="editBrief">Edit search</button>`:""}</div>
+    </div>`;
+  $("goListings").onclick=()=>setTab("listings"); $("goSites").onclick=()=>setTab("sites");
+  const eb=$("editBrief"); if(eb) eb.onclick=()=>openEditor(s);
+}
+function renderConnBar(){
+  const bar=$("connBar");
+  if(!healthLoaded){ bar.hidden=true; return; }
+  const ids=[...new Set(searches.filter(s=>s.active!==false).flatMap(mustFor))];
+  if(!ids.length){ bar.hidden=true; return; }
+  const must=ids.map(siteStatus);
+  const down=must.filter(x=>x.level==="down"), part=must.filter(x=>x.level==="partial");
+  const newest=must.map(x=>x.route.at).filter(Boolean).sort().pop();
+  const names=a=>a.map(x=>x.name).join(", ");
+  bar.hidden=false;
+  if(down.length){ bar.className="connbar bad"; bar.innerHTML=`<div class="lead2">${down.length} must-have site${down.length===1?"":"s"} not connected: ${esc(names(down))}. Deals there are being missed.</div><ul>${[...down,...part].map(x=>`<li><b>${esc(x.name)}:</b> ${esc(fixText(x))}</li>`).join("")}</ul>`; }
+  else if(part.length){ bar.className="connbar warn"; bar.innerHTML=`<div class="lead2">All ${must.length} must-have sites connected; ${esc(names(part))} only partly.</div><ul>${part.map(x=>`<li><b>${esc(x.name)}:</b> ${esc(fixText(x))}</li>`).join("")}</ul>`; }
+  else { bar.className="connbar ok"; bar.innerHTML=`<div class="lead2">All ${must.length} must-have sites connected<small>${esc(names(must))}${newest?" · last read "+esc(ago(newest)):""}</small></div>`; }
+}
+
+/* ---------- Sites ---------- */
+function renderSites(){
+  const s=current();
+  $("segSites").innerHTML=segHtml(); wireSeg($("segSites"));
+  if(!healthLoaded){ $("sitesHead").textContent="Checking site connections…"; }
+  if(!s){ $("siteCards").innerHTML=""; $("sitesLead").textContent="Start a search and the collector picks sites for it."; }
+  else {
+    const ids=s.sources||[]; const mustIds=mustFor(s);
+    const order=[...mustIds, ...ids.filter(id=>!mustIds.includes(id))];
+    const st=order.map(id=>({...siteStatus(id), must:mustIds.includes(id), meta:site(id)}));
+    const mustSt=st.filter(x=>x.must), okM=mustSt.filter(x=>x.level==="ok").length, downM=mustSt.filter(x=>x.level==="down").length, partM=mustSt.filter(x=>x.level==="partial");
+    $("sitesEyebrow").textContent=`Sites · ${s.name}`;
+    $("sitesHead").textContent = !ids.length ? `No sites picked yet for ${s.name}.`
+      : downM ? `${downM} must-have site${downM===1?"":"s"} not connected for ${s.name}.` : partM.length ? `All ${mustSt.length} must-have sites connected for ${s.name}; ${partM.map(x=>x.name).join(", ")} only partly.` : `All ${mustSt.length} must-have sites connected for ${s.name}.`;
+    $("sitesLead").textContent = (s.siteNotes ? s.siteNotes+" " : "") + "Each search reads its own sites. The collector picks them when a search starts and updates the list as sites come and go.";
+    $("siteCards").innerHTML = st.map(x=>{
+      const [label,cls]=levelOf(x); const r=x.route, fix=fixText(x);
+      const proof=r.proof ? "Last read: "+r.proof : (r.count!=null?`${r.count} matching listing${r.count===1?"":"s"} read`:"");
+      const tags=[x.meta.kind, x.meta.ships===true?"ships":"", x.meta.local===true?"local pickup":"", HOW[x.meta.how]||""].filter(Boolean).join(" · ");
+      return `<div class="site ${x.reason==="never"?"":x.level}">
+        <div class="sh"><h3>${x.meta.home?`<a href="${esc(x.meta.home)}" target="_blank" rel="noopener" style="text-decoration:none">${esc(x.meta.name)}</a>`:esc(x.meta.name)}</h3><span class="st ${cls}">${esc(label)}</span></div>
+        ${x.must?`<div class="must">Must-have for this search</div>`:""}
+        <div class="kind">${esc(tags)}</div>
+        ${x.routes.length?`<div class="rt">${x.routes.map(rr=>`<span>${esc(routeLine(rr))}</span>`).join("")}</div>`:""}
+        ${proof&&x.level!=="down"?`<div class="proof">${esc(proof)}</div>`:""}
+        ${fix?`<div class="fix">${esc(fix)}</div>`:""}
+      </div>`;}).join("") || `<div class="empty">The collector picks sites for this search on its next run.</div>`;
+    const ev=(s.events||[]).filter(e=>!e.date || new Date(e.date+"T23:59:00")>=new Date(Date.now()-864e5));
+    $("eventsBlock").hidden=!ev.length;
+    $("eventsList").innerHTML=ev.map(e=>`<div class="event"><div class="d">${esc(e.date?new Date(e.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}):"")}</div><div><strong>${e.url?`<a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.name)}</a>`:esc(e.name)}</strong><div class="note">${esc([e.time,e.place,e.note].filter(Boolean).join(" · "))}</div></div></div>`).join("");
+  }
+  const beat=["cloud","pc"].map(c=>{ const r=lastRunBy(c); return `${c==="pc"?"PC":"Cloud"} collector ${r?"last ran "+ago(r.at):"hasn't run yet"}`; });
+  $("connBeat").textContent=beat.join(" · ");
+  const all=allSiteIds().filter(id=>searches.some(s=>(s.sources||[]).includes(id)) || health.some(h=>h.id===id));
+  $("allSites").innerHTML=`<thead><tr><th>Site</th><th>Status</th><th>Used by</th><th>Last read</th></tr></thead><tbody>${all.map(id=>{
+    const x=siteStatus(id), [label,cls]=levelOf(x), used=searches.filter(s=>(s.sources||[]).includes(id)).map(s=>s.name);
+    return `<tr><td><strong>${esc(site(id).name)}</strong><div class="note">${esc(site(id).kind||"")}</div></td><td><span class="st ${cls}">${esc(label)}</span></td><td>${esc(used.join(", ")||"no search")}</td><td class="note">${esc(x.route.at?ago(x.route.at):"never")}</td></tr>`;}).join("")}</tbody>`;
+}
+
+/* ---------- shared rules (meta/rules) ---------- */
+const CHECKS_HTML = $("checkCards").innerHTML;
+function applyRulesDoc(doc){
+  RULES_DOC = (doc && typeof doc==="object") ? doc : null;
+  const n = RULES_DOC?.numbers || {};
+  ["dealPctDefault","exceptionalPct","exceptionalPrivatePct","priceFreshHours","connectedHours"].forEach(k=>{ const v=num(n[k]); if(v!=null) RULES[k]=v; });
+  if(Array.isArray(n.defaultMustHave) && n.defaultMustHave.length) RULES.defaultMustHave = n.defaultMustHave.map(String);
+  if(Array.isArray(n.brandedWords) && n.brandedWords.length){ try{ BRANDED = brandedRe(n.brandedWords); RULES.brandedWords = n.brandedWords.map(String); }catch(e){} }
+}
+function renderRules(){
+  document.querySelectorAll("[data-rule]").forEach(el=>{ const v=RULES[el.dataset.rule]; if(v!=null) el.textContent=v; });
+  const checks = RULES_DOC?.display?.checks;
+  $("checkCards").innerHTML = (Array.isArray(checks) && checks.length)
+    ? checks.map(c=>`<div class="card"><div class="n">${esc(c?.n)}</div><h3>${esc(c?.title)}</h3><p>${esc(c?.text)}</p></div>`).join("")
+    : CHECKS_HTML;
+  const rv=$("rulesVer");
+  if(RULES_DOC){
+    const d=new Date(RULES_DOC.updatedAt||"");
+    rv.textContent=`Rules v${RULES_DOC.version||"?"}${isNaN(d)?"":", updated "+d.toLocaleDateString("en-US",{month:"short",day:"numeric"})}`;
+    rv.hidden=false;
+  } else rv.hidden=true;
+}
+
+/* ---------- Checks ---------- */
+function renderChecks(){
+  const s=current();
+  $("segChecks").innerHTML=segHtml(); wireSeg($("segChecks"));
+  if(!s){ $("verifyCols").innerHTML=""; return; }
+  const ls=listings.filter(l=>l.searchId===s.id && !l.gone);
+  const c={passed:0,caution:0,failed:0,pending:0,unverified:0};
+  ls.forEach(l=>{ if(l.verified===false) c.unverified++; const k=l.check?.status; if(k&&c[k]!=null) c[k]++; else if(l.verified!==false) c.pending++; });
+  $("verifyCols").innerHTML=`
+    <div class="col"><p>${s.verifyNotes?esc(s.verifyNotes):`<span class="muted">The collector writes this checklist on the search's first run: what the real item has, what it gets confused with, its serial or VIN format, and what to ask the seller.</span>`}</p></div>
+    <div class="col"><dl class="terms">
+      <dt>Passed</dt><dd class="num">${c.passed}</dd><dt>Caution</dt><dd class="num">${c.caution}</dd><dt>Failed</dt><dd class="num">${c.failed}</dd>
+      <dt>Pending</dt><dd class="num">${c.pending}</dd><dt>Not opened yet</dt><dd class="num">${c.unverified}</dd></dl>
+      <p class="note">Listings for ${esc(s.name)} that aren't gone, by where they stand in the checks.</p></div>`;
+}
+
+/* ---------- Listings ---------- */
+function loadView(s){
+  const base=`${s.zip||""}|${s.radiusMi||""}`;
+  if(viewFor===s.id+"#"+base) return;
+  viewFor=s.id+"#"+base;
+  let saved=null; try{ saved=JSON.parse(localStorage.getItem("ds.geo."+s.id)||"null"); }catch(e){}
+  view=(saved && typeof saved==="object" && saved.base===base) ? {zip:String(saved.zip||""), radius:String(saved.radius||"any"), base} : {zip:s.zip||"", radius:"any", base};
+  const sel=$("fradius");
+  if(![...sel.options].some(o=>o.value===view.radius)){ const o=document.createElement("option"); o.value=view.radius; o.textContent=`Within ${Number(view.radius).toLocaleString("en-US")} mi`; sel.insertBefore(o, sel.querySelector('option[value="any"]')); }
+  sel.value=view.radius; $("fzip").value=view.zip; $("fzip").removeAttribute("aria-invalid");
+}
+function saveView(){ try{ if(viewFor) localStorage.setItem("ds.geo."+viewFor.split("#")[0], JSON.stringify(view)); }catch(e){} }
+function renderSummary(s){
+  const el=$("summary");
+  if(!s){ el.hidden=true; return; }
+  const m=MK.get(s.id)||marketFor(s), thr=num(s.dealPct)??RULES.dealPctDefault, run=lastRunFor(s.id);
+  const yrs=(s.minYear||s.maxYear)?`${s.minYear||"any"} to ${s.maxYear||"any"}`:"any";
+  const rule = s.pricing==="per-item" ? `${thr}% under each model's fair used price` : `${thr}% under ${money(m.value)} (${esc(m.basis)}), so ${m.value?money(m.value*(1-thr/100))+" or less":"once listings come in"}`;
+  el.hidden=false;
+  el.innerHTML=`<div class="block-head"><div><span class="section-label">${esc(s.category||"Search")}${s.active===false?" · paused":""}</span><h2 class="block-title">${esc(s.name)}</h2></div>${canWrite?`<button class="btn" id="editSearch" type="button">Edit search</button>`:""}</div>
+    <div class="cols">
+      <div class="col"><dl class="terms"><dt>Keywords</dt><dd>${esc(s.keywords)}${s.exclude?`<span class="muted"> · not ${esc(s.exclude)}</span>`:""}</dd><dt>Deal rule</dt><dd>${rule}</dd><dt>Ceiling</dt><dd>${s.maxPrice?money(s.maxPrice):"none"}</dd><dt>Years / miles</dt><dd>${yrs} / ${s.maxMiles?miles(s.maxMiles):"any"}</dd></dl></div>
+      <div class="col"><dl class="terms"><dt>Area</dt><dd>${s.zip?`within ${esc(s.radiusMi??"any")} mi of ${esc(s.zip)} counts as near you${s.shipOutside?"; farther only if it ships, priced with shipping":""}`:"nationwide"}</dd><dt>Sites</dt><dd>${(s.sources||[]).map(id=>esc(site(id).name)).join(", ")||"picked on the first run"}</dd><dt>Last run</dt><dd>${run?`${esc(ago(run.at))}: ${esc(run.note||"")}`:"not yet"}</dd></dl></div>
+    </div>`;
+  const b=$("editSearch"); if(b) b.onclick=()=>openEditor(s);
+}
+function renderSourceFilter(s){
+  const sel=$("fsource"), cur=sel.value||"all";
+  const ids=[...new Set(listings.filter(l=>l.searchId===s?.id).map(l=>l.source))];
+  sel.innerHTML=`<option value="all">All sites</option>`+ids.map(id=>`<option value="${esc(id)}">${esc(site(id).name)}</option>`).join("");
+  sel.value=ids.includes(cur)?cur:"all";
+}
+function renderList(s){
+  const list=$("list");
+  if(!s){ list.innerHTML=EMPTY; return; }
+  const q=$("q").value.trim().toLowerCase(), fs=$("fsource").value, fst=$("fstatus").value, deals=$("fdeals").checked, sort=$("fsort").value;
+  const origin=zipCoords(view.zip), lim=view.radius==="any"?null:Number(view.radius);
+  let rows=listings.filter(l=>l.searchId===s.id).map(l=>{ let d=milesBetween(origin,coordsFor(l)); if(d==null && view.zip===s.zip && typeof l.distanceMi==="number") d=l.distanceMi; return {l, sc:score(l,s), d}; });
+  let outside=0;
+  rows=rows.filter(({l,sc,d})=>{
+    if(lim!=null && origin && d!=null && d>lim){ outside++; return false; }
+    const st=l.status||"new";
+    if(fst==="open" && (st==="passed"||l.gone)) return false;
+    if(fst!=="open" && fst!=="all" && st!==fst) return false;
+    if(fs!=="all" && l.source!==fs) return false;
+    if(deals && !sc.isDeal) return false;
+    if(q && !`${l.title} ${l.location} ${l.seller} ${l.year}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const by={deal:(a,b)=>(b.sc.pct??-9)-(a.sc.pct??-9), price:(a,b)=>(num(a.l.price)??1e12)-(num(b.l.price)??1e12), new:(a,b)=>String(b.l.foundAt||"").localeCompare(String(a.l.foundAt||"")), miles:(a,b)=>(num(a.l.miles)??1e12)-(num(b.l.miles)??1e12), near:(a,b)=>(a.d??1e9)-(b.d??1e9), year:(a,b)=>(num(b.l.year)??0)-(num(a.l.year)??0)}[sort];
+  rows.sort(by);
+  if(!rows.length){
+    const any=listings.some(l=>l.searchId===s.id);
+    const msg=!any?["No listings collected yet.","The collector adds listings here after its next run."]:outside?[`Nothing within ${Number(view.radius).toLocaleString("en-US")} mi of ${view.zip}.`,`${outside} listing${outside===1?" is":"s are"} farther out. Widen the radius to see ${outside===1?"it":"them"}.`]:["Nothing matches these filters.","Clear the search box or switch the status filter to All."];
+    list.innerHTML=`<div class="empty"><strong>${esc(msg[0])}</strong><br>${esc(msg[1])}</div>`; return;
+  }
+  const note=outside?`<div class="note">${outside} more listing${outside===1?"":"s"} outside ${Number(view.radius).toLocaleString("en-US")} mi.</div>`:"";
+  list.innerHTML=rows.map(({l,sc,d})=>{
+    let pill="";
+    if(sc.pct!=null){ const p=Math.round(sc.pct*100); const cls=sc.isDeal?"deal":(sc.pct>0?"near":"over"); pill=`<span class="pill ${cls}">${p>0?`${p}% under`:p<0?`${-p}% over`:"at market"}</span>`; }
+    else if(s.pricing==="per-item") pill=`<span class="pill over">fair price pending</span>`;
+    const ceilingNote=(sc.ceiling!=null && !sc.underCeiling)?`<span>over your ${money(sc.ceiling)} ceiling</span>`:"";
+    const radiusNote=(sc.isDeal && sc.radius!=null && s.zip)?(sc.inRadius?`<span class="flag">near you</span>`:(sc.homeDist==null?`<span class="away">location unknown</span>`:`<span class="away">outside your ${Number(sc.radius).toLocaleString("en-US")} mi</span>`)):"";
+    const unv=l.gone?`<span class="pill over">gone</span>`:(l.verified===false?`<span class="pill unv">unverified</span>`:"");
+    const tb=branded(l)?`<span class="pill unv">${esc(l.titleStatus||"branded")} title</span>`:"";
+    const ck=l.check||null;
+    const ckLabel=!ck?"":ck.status==="passed"?`<span class="pill ok" title="${esc((ck.positives||[]).join('; '))}">checked ✓${ck.level>=3?" ×2":""}${ck.photos?` · ${ck.photos} photos`:""}</span>`:ck.status==="failed"?`<span class="pill bad">failed check</span>`:ck.status==="caution"?`<span class="pill unv">caution</span>`:`<span class="pill over">check pending</span>`;
+    const ckNote=ck&&(ck.summary||(ck.flags||[]).length)?`<span class="cnote${ck.status==="failed"?" bad":""}">${esc(ck.summary||"")}${(ck.flags||[]).length?` Concerns: ${esc(ck.flags.join("; "))}`:""}</span>`:"";
+    const lnote=l.note?`<span class="lnote">${esc(l.note)}</span>`:"";
+    const distTxt=d!=null?`<span class="dist">${Math.round(d).toLocaleString("en-US")} mi away</span>`:"";
+    const photos=(l.photosUrl||l.url)?`<a class="photos" href="${esc(l.photosUrl||l.url)}" target="_blank" rel="noopener">Ad ↗</a>`:"";
+    const prev=(l.priceHistory||[]).filter(h=>num(h.price)!=null && num(h.price)!==num(l.price)).slice(-1)[0]||null;
+    const wasHtml=prev?`<span class="was">${money(prev.price)}</span>`:"";
+    const change=prev?(num(prev.price)>num(l.price)?`<span class="cut">Price cut ${money(prev.price)} → ${money(l.price)}${l.priceChangedAt?" · spotted "+esc(ago(l.priceChangedAt)):""}</span>`:`<span class="up">Price up ${money(prev.price)} → ${money(l.price)}${l.priceChangedAt?" · spotted "+esc(ago(l.priceChangedAt)):""}</span>`):"";
+    const seenAt=[l.lastChecked,l.lastSeen].filter(Boolean).sort().pop();
+    const freshTxt=l.gone?"":l.verified===false?`<span class="away">price not confirmed on the ad yet</span>`:seenAt?`<span>price checked ${esc(ago(seenAt))}</span>`:"";
+    const ref=l.refPrice?`<span>fair used ${money(l.refPrice)}${l.refBasis?` (${esc(l.refBasis)})`:""}</span>`:"";
+    const ship=num(l.shipCost)?`<span>+ ${money(l.shipCost)} shipping</span>`:(l.ships===true?`<span>ships</span>`:"");
+    const st=l.status||"new";
+    const opts=["new","watching","contacted","passed"].map(v=>`<option value="${v}"${v===st?" selected":""}>${v[0].toUpperCase()+v.slice(1)}</option>`).join("");
+    return `<article class="row${(st==="passed"||l.gone)?" passed":""}">
+      <div class="price"><span class="amt">${money(l.price)}</span>${wasHtml}${l.gone?"":pill}</div>
+      <div class="title">${(sc.isDeal&&!l.gone)?'<span class="flag">Deal · </span>':(sc.lead&&!l.gone)?'<span class="away">Check · </span>':(sc.checkFailed&&!l.gone)?'<span style="color:var(--bad);font-weight:600">Likely not legit · </span>':""}${l.url?`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.title)}</a>`:esc(l.title)}</div>
+      <select class="field" aria-label="Status for ${esc(l.title)}" data-id="${esc(l.id)}" ${canWrite?"":"disabled"}>${opts}</select>
+      <div class="meta">${photos}${unv}${tb}${ckLabel}<span>${esc(site(l.source).name)}</span>${l.miles?`<span class="num">${miles(l.miles)}</span>`:""}<span>${esc(l.location||"")}</span>${distTxt}${ship}<span>${esc(l.seller||"")}${l.sellerType?` (${esc(l.sellerType)})`:""}</span>${ref}${change}<span>found ${esc(ago(l.foundAt))}</span>${freshTxt}${ceilingNote}${radiusNote}${lnote}${ckNote}</div>
+    </article>`;}).join("")+note;
+  list.querySelectorAll("select[data-id]").forEach(sel=>sel.onchange=async()=>{
+    if(!db) return;
+    try{ await db.collection("listings").doc(sel.dataset.id).update({status:sel.value}); toast("Marked "+sel.value); }
+    catch(e){ toast("Couldn't save that change. Try again."); }
+  });
+}
+function renderListings(){
+  const s=current();
+  $("segListings").innerHTML=segHtml(); wireSeg($("segListings"));
+  if(s){ const open=openOf(s).length; $("listEyebrow").textContent=`Listings · ${s.name}`; $("listHead").textContent=`${open} open listing${open===1?"":"s"} for ${s.name}, best deals first.`; }
+  else { $("listEyebrow").textContent="Listings"; $("listHead").textContent="No searches yet."; }
+  renderSummary(s);
+  $("filters").hidden=!s; $("paste").hidden=!s||!canWrite;
+  if(s){ loadView(s); renderSourceFilter(s); $("pasteGo").textContent=`Add to ${s.name}`; }
+  renderList(s);
+}
+
+/* ---------- How it works (meta/architecture; read only, nothing else depends on it) ---------- */
+const HW_KIND = {input:"Input", job:"Scheduled job", rules:"Rules", service:"Outside service", data:"Data store", output:"Output", page:"Page"};
+let archJson = null, archRev = 0;
+const hw = {q:"", sel:null, mode:null, rev:-1, nodes:[], edges:[], cols:[], panelHtml:"", ro:null};
+try { const v=JSON.parse(localStorage.getItem("ds.how")||"null"); if(v&&typeof v==="object"){ hw.q=String(v.q||""); hw.sel=v.sel!=null?String(v.sel):null; } } catch(e) {}
+function saveHow(){ try{ localStorage.setItem("ds.how", JSON.stringify({q:hw.q, sel:hw.sel})); }catch(e){} }
+function setArch(doc){
+  const ok = doc && typeof doc==="object" && Array.isArray(doc.nodes) && doc.nodes.length && Array.isArray(doc.columns) && doc.columns.length;
+  const s = ok ? JSON.stringify(doc) : null;
+  archState = ok ? "ok" : "missing";
+  if(s===archJson) return;
+  archJson = s; ARCH = ok ? doc : null; archRev++;
+}
+function monD(iso){ const d=new Date(iso||""); return isNaN(d) ? "" : d.toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
+const hwArr = v => Array.isArray(v) ? v.map(x=>String(x??"")).filter(Boolean) : [];
+function hwPrep(){
+  const cols = ARCH.columns.filter(c=>c&&c.id!=null).map(c=>({id:String(c.id), label:String(c.label??c.id)}));
+  const ci = new Map(cols.map((c,i)=>[c.id,i]));
+  const nodes = ARCH.nodes.filter(n=>n&&n.id!=null).map(n=>({...n, id:String(n.id), ci: ci.has(String(n.col)) ? ci.get(String(n.col)) : cols.length-1}))
+    .sort((a,b)=>a.ci-b.ci || (num(a.order)??999)-(num(b.order)??999));
+  nodes.forEach((n,i)=>{ n.idx=i; n.oi=nodes.filter(m=>m.ci===n.ci && m.idx<i).length; });
+  const byId = new Map(nodes.map(n=>[n.id,n]));
+  const edges = (Array.isArray(ARCH.edges)?ARCH.edges:[]).filter(e=>e && byId.has(String(e.from)) && byId.has(String(e.to)) && String(e.from)!==String(e.to))
+    .map((e,i)=>({i, s:byId.get(String(e.from)), t:byId.get(String(e.to)), label:String(e.label??"")}));
+  nodes.forEach(n=>{ n.hay=[n.name,n.summary,n.does,...hwArr(n.reads),...hwArr(n.writes),...hwArr(n.rules),n.code,...hwArr(n.keywords)].map(x=>String(x??"")).join(" \n ").toLowerCase(); });
+  hw.cols=cols; hw.nodes=nodes; hw.edges=edges; hw.byId=byId;
+}
+function hwLive(n){
+  const lv = n.live; if(!lv || typeof lv!=="object") return null;
+  switch(lv.type){
+    case "run": {
+      const r = lastRunBy(lv.collector); if(!r) return {text:"No runs yet"};
+      let note = String(r.note||""), badge = null;
+      const m = note.match(/^rules v([\w.]+):\s*/i); if(m){ badge="rules v"+m[1]; note=note.slice(m[0].length); }
+      return {text:`Last run ${ago(r.at)}: ${note.slice(0,90)}${note.length>90?"…":""}`, badge};
+    }
+    case "sites": {
+      if(!healthLoaded) return {text:"Checking sites…"};
+      const ids=[...new Set(searches.filter(s=>s.active!==false).flatMap(s=>s.sources||[]))].filter(id=>site(id).how===lv.how);
+      const c={ok:0,partial:0,down:0}; ids.forEach(id=>{ const l=siteStatus(id).level; c[l]=(c[l]||0)+1; });
+      return {text:`${c.ok} connected, ${c.partial} partial, ${c.down} down`};
+    }
+    case "rules": return {text: RULES_DOC ? `rules v${RULES_DOC.version||"?"}${monD(RULES_DOC.updatedAt)?", updated "+monD(RULES_DOC.updatedAt):""}` : "Using built-in fallbacks"};
+    case "db": return {text:`${searches.length} searches · ${listings.length} listings · ${runs.length} runs · ${health.length} sites`};
+    case "page": return {text:`Page v${PAGE_VERSION}`};
+    default: return null;
+  }
+}
+function hwLiveHtml(lv){ return lv ? `${lv.badge?`<span class="hw-badge">${esc(lv.badge)}</span>`:""}<span>${esc(lv.text)}</span>` : ""; }
+function hwHl(text){
+  const t=String(text??""), q=hw.q.trim(); if(!q) return esc(t);
+  const lo=t.toLowerCase(), ql=q.toLowerCase(); let out="", i=0, j;
+  while((j=lo.indexOf(ql,i))!==-1){ out+=esc(t.slice(i,j))+"<mark>"+esc(t.slice(j,j+q.length))+"</mark>"; i=j+q.length; }
+  return out+esc(t.slice(i));
+}
+function hwMatches(){
+  const q=hw.q.trim().toLowerCase(); if(!q) return null;
+  const hit=new Set(hw.nodes.filter(n=>n.hay.includes(q)).map(n=>n.idx)), ehit=new Set();
+  hw.edges.forEach(e=>{ if(e.label.toLowerCase().includes(q)){ ehit.add(e.i); hit.add(e.s.idx); hit.add(e.t.idx); } });
+  return {hit, ehit};
+}
+function renderHow(){
+  const ok = archState==="ok" && ARCH;
+  $("hwMsg").hidden=!!ok; $("hwIntro").hidden=!ok; $("hwTools").hidden=!ok; $("hwHost").hidden=!ok;
+  if(!ok){ $("hwMsg").textContent = archState==="loading" ? "Loading the architecture record…" : "Architecture record not found."; hw.rev=-1; return; }
+  if(hw.rev!==archRev){ hwPrep(); }
+  $("hwTitle").textContent = String(ARCH.title||"How Deal Scout works");
+  $("hwMeta").textContent = `Architecture v${ARCH.version??"?"}${ARCH.builtFrom?", built from "+ARCH.builtFrom:""}${monD(ARCH.updatedAt)?", updated "+monD(ARCH.updatedAt):""}`;
+  if($("hwQ").value!==hw.q && document.activeElement!==$("hwQ")) $("hwQ").value=hw.q;
+  if(hw.sel!=null && !hw.byId.has(hw.sel)) hw.sel=null;
+  const host=$("hwHost"), mode=(host.clientWidth||window.innerWidth)>=760?"wide":"narrow";
+  if(hw.rev!==archRev || hw.mode!==mode) hwBuild(mode);
+  hw.nodes.forEach(n=>{ const el=host.querySelector(`.hw-live[data-idx="${n.idx}"]`); if(!el) return; const h=hwLiveHtml(hwLive(n)); if(el.innerHTML!==h) el.innerHTML=h; el.hidden=!h; });
+  hwApply();
+  hwPanel();
+  if(hw.mode==="wide") requestAnimationFrame(hwEdges);
+}
+function hwBuild(mode){
+  const host=$("hwHost"); hw.mode=mode; hw.rev=archRev; hw.panelHtml="";
+  const card=n=>`<button type="button" class="hw-card${n.kind==="rules"||n.kind==="data"?" strong":""}" data-idx="${n.idx}"><span class="hw-name">${esc(n.name||n.id)}</span>${n.summary?`<span class="hw-sum">${esc(n.summary)}</span>`:""}<span class="hw-live" data-idx="${n.idx}" hidden></span></button>`;
+  const outs=n=>{ const o=hw.edges.filter(e=>e.s===n); return o.length?`<ul class="hw-out">${o.map(e=>`<li data-e="${e.i}">→ ${esc(e.t.name||e.t.id)}${e.label?` (${esc(e.label)})`:""}</li>`).join("")}</ul>`:""; };
+  const colHtml=(c,ci)=>`<div class="hw-col"><div class="hw-colhead">${esc(c.label)}</div>${hw.nodes.filter(n=>n.ci===ci).map(n=>`<div class="hw-item">${card(n)}${mode==="narrow"?outs(n)+`<div class="hw-slot" data-idx="${n.idx}"></div>`:""}</div>`).join("")}</div>`;
+  host.innerHTML = mode==="wide"
+    ? `<div class="hw-diagram wide" id="hwDia" style="--hw-n:${hw.cols.length}"><svg class="hw-svg" aria-hidden="true"><defs><marker id="hwArrow" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="7" markerHeight="7" markerUnits="userSpaceOnUse" orient="auto"><path class="ah" d="M0,0.5 L8,4 L0,7.5 z"></path></marker></defs><g></g></svg>${hw.cols.map(colHtml).join("")}</div><div id="hwPanelWide"></div>`
+    : `<div class="hw-diagram narrow" id="hwDia">${hw.cols.map(colHtml).join("")}</div>`;
+  host.querySelectorAll(".hw-card").forEach(b=>b.onclick=()=>{ const n=hw.nodes[Number(b.dataset.idx)]; hwOpen(hw.sel===n.id?null:n.id, false); });
+}
+function hwApply(){
+  const host=$("hwHost"), m=hwMatches(), cnt=$("hwCount");
+  host.querySelectorAll(".hw-card").forEach(b=>{ const i=Number(b.dataset.idx), n=hw.nodes[i];
+    b.classList.toggle("hit", !!m && m.hit.has(i)); b.classList.toggle("dim", !!m && !m.hit.has(i));
+    b.classList.toggle("sel", hw.sel===n.id); b.setAttribute("aria-expanded", String(hw.sel===n.id)); });
+  const eOn=e=>!m || m.ehit.has(e.i) || m.hit.has(e.s.idx) || m.hit.has(e.t.idx);
+  host.querySelectorAll("[data-e]").forEach(el=>{ const e=hw.edges[Number(el.dataset.e)]; if(e) el.classList.toggle("dim", !eOn(e)); });
+  if(!m){ cnt.hidden=true; return; }
+  cnt.hidden=false; cnt.textContent = m.hit.size ? `${m.hit.size} part${m.hit.size===1?" matches":"s match"}` : `No part mentions '${hw.q.trim()}'.`;
+}
+function hwPanel(){
+  const n = hw.sel!=null ? hw.byId.get(hw.sel) : null;
+  const wide=$("hwPanelWide"); if(wide && hw.mode!=="wide") wide.innerHTML="";
+  const target = !n ? null : hw.mode==="wide" ? wide : $("hwHost").querySelector(`.hw-slot[data-idx="${n.idx}"]`);
+  $("hwHost").querySelectorAll(".hw-slot").forEach(s=>{ if(s!==target && s.innerHTML) s.innerHTML=""; });
+  if(!n){ if(wide) wide.innerHTML=""; hw.panelHtml=""; return; }
+  const li=a=>a.length?`<ul class="hw-list">${a.map(x=>`<li>${hwHl(x)}</li>`).join("")}</ul>`:`<span class="muted">None</span>`;
+  const go=(e,other)=>`<li><button type="button" class="hw-link" data-go="${other.idx}">${hwHl(other.name||other.id)}</button>${e.label?` <span class="muted">(${hwHl(e.label)})</span>`:""}</li>`;
+  const out=hw.edges.filter(e=>e.s===n), inn=hw.edges.filter(e=>e.t===n), lv=hwLive(n);
+  const rows=[["Reads",li(hwArr(n.reads))],["Writes",li(hwArr(n.writes))],["Rules it follows",li(hwArr(n.rules))],["Where the code lives",n.code?hwHl(n.code):`<span class="muted">Not recorded</span>`]];
+  if(lv) rows.push(["Live status",`<span class="hw-live-dd">${hwLiveHtml(lv)}</span>`]);
+  rows.push(["Connects to", out.length?`<ul class="hw-list">${out.map(e=>go(e,e.t)).join("")}</ul>`:`<span class="muted">Nothing</span>`]);
+  rows.push(["Fed by", inn.length?`<ul class="hw-list">${inn.map(e=>go(e,e.s)).join("")}</ul>`:`<span class="muted">Nothing</span>`]);
+  const html=`<section class="hw-panel" id="hwPanel" role="region" aria-labelledby="hwPanelTitle">
+    <div class="block-head"><div><span class="section-label">${esc(HW_KIND[n.kind]||n.kind||"Part")}</span><h3 class="block-title" id="hwPanelTitle">${hwHl(n.name||n.id)}</h3></div><button type="button" class="btn" id="hwClose">Close</button></div>
+    ${n.does?`<p class="hw-does">${hwHl(n.does)}</p>`:""}
+    <dl class="terms">${rows.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl></section>`;
+  if(html===hw.panelHtml && target.innerHTML) return;
+  hw.panelHtml=html; target.innerHTML=html;
+  $("hwClose").onclick=()=>{ const id=hw.sel; hwOpen(null); const c=hwCard(id); if(c) c.focus(); };
+  target.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{ const m=hw.nodes[Number(b.dataset.go)]; hwOpen(m.id, false); const c=hwCard(m.id); if(c){ c.scrollIntoView({block:"center", behavior:hwMotion()}); c.focus({preventScroll:true}); } });
+}
+function hwMotion(){ try{ return matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"; }catch(e){ return "auto"; } }
+function hwCard(id){ const n=id!=null?hw.byId?.get(id):null; return n ? $("hwHost").querySelector(`.hw-card[data-idx="${n.idx}"]`) : null; }
+function hwOpen(id, reveal){
+  hw.sel=id; saveHow(); hwApply(); hwPanel();
+  if(reveal!==false || hw.mode==="wide"){ const p=$("hwPanel"); if(p) p.scrollIntoView({block:"nearest", behavior:hwMotion()}); }
+}
+function hwEdges(){
+  const dia=$("hwDia"); if(!dia || !dia.classList.contains("wide") || tab!=="how") return;
+  const D=dia.getBoundingClientRect(); if(!D.width) return;
+  const g=dia.querySelector("svg.hw-svg g"); dia.querySelectorAll(".hw-lbl").forEach(x=>x.remove());
+  const colEls=[...dia.querySelectorAll(".hw-col")], nc=colEls.length;
+  const C=colEls.map(c=>{ const r=c.getBoundingClientRect(); return {l:r.left-D.left, r:r.right-D.left}; });
+  const R=new Map();
+  dia.querySelectorAll(".hw-card").forEach(b=>{ const r=b.getBoundingClientRect(), n=hw.nodes[Number(b.dataset.idx)]; R.set(n.idx,{l:r.left-D.left, r:r.right-D.left, t:r.top-D.top, b:r.bottom-D.top, cx:(r.left+r.right)/2-D.left, cy:(r.top+r.bottom)/2-D.top, n}); });
+  const gap=i=>({l:C[i].r, r:C[i+1].l});
+  // classify edges and collect ports
+  const E=hw.edges.map(e=>{ const s=R.get(e.s.idx), t=R.get(e.t.idx); let type;
+    if(e.s.ci!==e.t.ci) type="cross"; else if(Math.abs(e.s.oi-e.t.oi)===1) type="vert"; else type="bracket";
+    return {e, s, t, type}; });
+  const ports=new Map(), addPort=(rect,side,x,key)=>{ const k=rect.n.idx+side; if(!ports.has(k)) ports.set(k,[]); ports.get(k).push({key,x}); };
+  const brk=new Map();
+  E.forEach((x,i)=>{
+    if(x.type==="cross"){ const fwd=x.e.s.ci<x.e.t.ci; addPort(x.s, fwd?"R":"L", x.t.cy, i+"s"); addPort(x.t, fwd?"L":"R", x.s.cy, i+"t"); }
+    else if(x.type==="vert"){ const down=x.e.s.oi<x.e.t.oi; addPort(x.s, down?"B":"T", 0, i+"s"); addPort(x.t, down?"T":"B", 0, i+"t"); }
+    else { const busy=gi=>E.filter(y=>y.type==="cross" && Math.min(y.e.s.ci,y.e.t.ci)<=gi && Math.max(y.e.s.ci,y.e.t.ci)>gi).length, ci=x.e.s.ci;
+      x.side = ci===nc-1 ? "L" : ci===0 ? "R" : (busy(ci-1)<=busy(ci) ? "L" : "R"); addPort(x.s, x.side, x.t.cy, i+"s"); addPort(x.t, x.side, x.s.cy, i+"t");
+      const k=x.e.s.ci+x.side; if(!brk.has(k)) brk.set(k,[]); brk.get(k).push(x); }
+  });
+  const P={};
+  ports.forEach((list,k)=>{ const idx=Number(k.slice(0,-1)), side=k.slice(-1), r=R.get(idx); list.sort((a,b)=>a.x-b.x);
+    list.forEach((p,j)=>{ const f=(j+1)/(list.length+1);
+      P[p.key] = side==="R"?{x:r.r,y:r.t+(r.b-r.t)*f}: side==="L"?{x:r.l,y:r.t+(r.b-r.t)*f}: side==="T"?{x:r.l+(r.r-r.l)*f,y:r.t}:{x:r.l+(r.r-r.l)*f,y:r.b}; }); });
+  // bracket lanes hug the column edge; reserve that space in the neighbouring gap
+  const reserve={};
+  brk.forEach((list,k)=>{ list.sort((a,b)=>Math.abs(a.e.s.oi-a.e.t.oi)-Math.abs(b.e.s.oi-b.e.t.oi)); const ci=Number(k.slice(0,-1)), side=k.slice(-1);
+    list.forEach((x,j)=>{ x.lane = side==="R" ? C[ci].r+10+j*8 : C[ci].l-10-j*8; });
+    reserve[k]=10+list.length*8; });
+  // vertical lanes in each gap, one per destination card
+  const laneOf=(gi,destIdx)=>{ const key="g"+gi; if(!laneOf.m[key]) laneOf.m[key]=[]; return laneOf.m[key]; }; laneOf.m={};
+  E.forEach(x=>{ if(x.type!=="cross") return; const a=Math.min(x.e.s.ci,x.e.t.ci), b=Math.max(x.e.s.ci,x.e.t.ci), dest=x.e.t;
+    for(let gi=a; gi<b; gi++){ const L=laneOf(gi); if(!L.some(d=>d.idx===dest.idx)) L.push(dest); } });
+  const laneX=(gi,dest)=>{ const L=laneOf(gi).slice().sort((p,q)=>R.get(p.idx).cy-R.get(q.idx).cy), G=gap(gi);
+    const lo=G.l+(reserve[gi+"R"]||0)+6, hi=G.r-(reserve[(gi+1)+"L"]||0)-6, c=(lo+hi)/2, sp=Math.min(12,(hi-lo)/Math.max(1,L.length));
+    return c+(L.findIndex(d=>d.idx===dest.idx)-(L.length-1)/2)*sp; };
+  const corridor=(ci,yWant)=>{ const cs=[...R.values()].filter(r=>r.n.ci===ci).sort((a,b)=>a.t-b.t); if(!cs.length) return yWant;
+    const ys=[cs[0].t-15, cs[cs.length-1].b+15]; for(let j=0;j<cs.length-1;j++) ys.push((cs[j].b+cs[j+1].t)/2);
+    return ys.sort((a,b)=>Math.abs(a-yWant)-Math.abs(b-yWant))[0]; };
+  const placed=[], cards=[...R.values()];
+  const hits=(a,b)=>a.l<b.r-1 && b.l<a.r-1 && a.t<b.b-1 && b.t<a.b-1;
+  const label=(x,i,cx,cy,maxW,minX,maxX,anchor)=>{
+    if(!x.e.label) return;
+    const el=document.createElement("div"); el.className="hw-lbl"; el.dataset.e=String(x.e.i); el.textContent=x.e.label; el.style.maxWidth=Math.max(40,maxW)+"px";
+    dia.appendChild(el); const w=el.offsetWidth, h=el.offsetHeight;
+    let left = anchor==="start" ? cx : anchor==="end" ? cx-w : cx-w/2; left=Math.max(minX, Math.min(maxX-w, left));
+    for(const dy of [0,-(h/2+6),(h/2+6),-(h+10),(h+10),-(1.5*h+14),(1.5*h+14)]){ const r={l:left, r:left+w, t:cy-h/2+dy, b:cy+h/2+dy};
+      if(!placed.some(p=>hits(p,r)) && !cards.some(c=>hits(c,r)) && !segs.some(sg=>sg.e!==x.e.i && hits(sg,r))){ el.style.left=r.l+"px"; el.style.top=r.t+"px"; placed.push(r); return; } }
+    el.remove();
+  };
+  let svg="";
+  const jobs=[], segs=[];
+  const toD=pts=>"M"+pts.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" L");
+  E.forEach((x,i)=>{
+    const ps=P[i+"s"], pt=P[i+"t"]; let d, lab;
+    if(x.type==="cross"){
+      const fwd=x.e.s.ci<x.e.t.ci, a=fwd?ps:pt, b=fwd?pt:ps, ca=Math.min(x.e.s.ci,x.e.t.ci), cb=Math.max(x.e.s.ci,x.e.t.ci);
+      const pts=[[a.x,a.y]]; let y=a.y;
+      for(let gi=ca; gi<cb; gi++){ const lx=laneX(gi,x.e.t); pts.push([lx,y]);
+        const ny = gi<cb-1 ? corridor(gi+1, b.y) : b.y; pts.push([lx,ny]); y=ny; }
+      pts.push([b.x,b.y]); if(!fwd) pts.reverse();
+      x.pts=pts; d=toD(pts);
+      if(cb-ca===1){ const lx=pts[1][0], G=gap(ca); lab=[lx,(a.y+b.y)/2, G.r-G.l-10, G.l+3, G.r-3, "mid"]; }
+      else { const mc=ca+1, y2=pts[2][1]; lab=[(C[mc].l+C[mc].r)/2, y2, C[mc].r-C[mc].l-20, C[mc].l, C[mc].r, "mid"]; }
+    } else if(x.type==="vert"){
+      const my=(ps.y+pt.y)/2;
+      x.pts=[[ps.x,ps.y],[ps.x,my],[pt.x,my],[pt.x,pt.y]]; d=toD(x.pts);
+      const col=C[x.e.s.ci]; lab=[pt.x+8, my, (col.r-pt.x)-14, col.l, col.r, "start"];
+    } else {
+      const lx=x.lane; x.pts=[[ps.x,ps.y],[lx,ps.y],[lx,pt.y],[pt.x,pt.y]]; d=toD(x.pts);
+      const ci=x.e.s.ci, my=(ps.y+pt.y)/2;
+      if(x.side==="R"){ const G=ci<nc-1?gap(ci):{l:C[ci].r,r:C[ci].r+60}; lab=[lx+5, my, G.r-lx-12, lx+5, G.r-3, "start"]; }
+      else { const G=ci>0?gap(ci-1):{l:C[ci].l-60,r:C[ci].l}; lab=[lx-5, my, lx-G.l-12, G.l+3, lx-5, "end"]; }
+    }
+    svg+=`<path class="e hw-edge" data-e="${x.e.i}" d="${d}" marker-end="url(#hwArrow)"></path>`;
+    jobs.push([x,i,...lab]);
+    for(let k=0;k<x.pts.length-1;k++){ const [x1,y1]=x.pts[k], [x2,y2]=x.pts[k+1]; segs.push({e:x.e.i, l:Math.min(x1,x2)-2, r:Math.max(x1,x2)+2, t:Math.min(y1,y2)-2, b:Math.max(y1,y2)+2}); }
+  });
+  g.innerHTML=svg;
+  // labels for short single-gap edges first, then the rest, so the collision check drops the least useful ones
+  jobs.sort((p,q)=>(p[0].type==="cross"?0:1)-(q[0].type==="cross"?0:1)).forEach(j=>label(...j));
+  hwApply();
+}
+$("hwQ").addEventListener("input",()=>{ hw.q=$("hwQ").value; saveHow(); if(archState!=="ok") return; hwApply();
+  const m=hwMatches(); if(m && m.hit.size===1){ const n=hw.nodes[[...m.hit][0]]; if(hw.sel!==n.id){ hw.sel=n.id; saveHow(); hwApply(); } } hw.panelHtml=""; hwPanel(); });
+$("hwQ").addEventListener("keydown",e=>{ if(e.key!=="Enter" || archState!=="ok") return; e.preventDefault(); const m=hwMatches(); if(!m||!m.hit.size) return;
+  const first=hw.nodes.find(n=>m.hit.has(n.idx)); hw.panelHtml=""; hwOpen(first.id, true); });
+document.addEventListener("keydown",e=>{ if(e.key!=="Escape" || tab!=="how" || !$("overlay").hidden || hw.sel==null) return;
+  const id=hw.sel, inPanel=$("hwPanel")?.contains(document.activeElement); hwOpen(null, false); if(inPanel){ const c=hwCard(id); if(c) c.focus(); } });
+try{ hw.ro=new ResizeObserver(()=>{ if(tab!=="how" || archState!=="ok") return; const w=$("hwHost").clientWidth; if(!w) return;
+  const mode=w>=760?"wide":"narrow"; if(mode!==hw.mode) renderHow(); else if(mode==="wide") hwEdges(); }); hw.ro.observe($("hwHost")); }catch(e){}
+try{ document.fonts?.ready?.then(()=>{ if(tab==="how") hwEdges(); }); }catch(e){}
+
+/* ---------- tabs ---------- */
+function setTab(t, fromHash){
+  tab=TABS.includes(t)?t:"brief";
+  TABS.forEach(x=>{ $("p-"+x).hidden=(x!==tab); $("tab-"+x).setAttribute("aria-selected", String(x===tab)); });
+  if(!fromHash){ try{ if(location.hash!=="#"+tab) location.hash=tab; }catch(e){} }
+  render();
+  window.scrollTo({top:0});
+}
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
+window.addEventListener("hashchange",()=>{ const h=location.hash.replace("#",""); if(TABS.includes(h) && h!==tab) setTab(h,true); });
+
+function render(){
+  if(!searches.find(s=>s.id===selected)) selected=searches[0]?.id||null;
+  refreshMarkets();
+  renderRules();
+  renderConnBar();
+  if(tab==="brief") renderBrief();
+  if(tab==="listings") renderListings();
+  if(tab==="sites") renderSites();
+  if(tab==="checks") renderChecks();
+  if(tab==="how"){ try{ renderHow(); }catch(e){ ARCH=null; archState="missing"; try{ renderHow(); }catch(_){} } }
+}
+setInterval(()=>{ if(tab==="brief"||tab==="sites") render(); }, 5*60*1000);
+$("connBar").addEventListener("click",()=>setTab("sites"));
+
+/* ---------- quick add ---------- */
+function parseQuick(text){
+  let t=" "+text.trim()+" ";
+  const out={maxPrice:null,minYear:null,maxYear:null,exclude:[]};
+  t=t.replace(/\b(?:under|below|max|less than|up to)\s*\$?\s*([\d.,]+)\s*(k)?\b/i,(m,n,k)=>{ out.maxPrice=Math.round(Number(n.replace(/,/g,""))*(k?1000:1)); return " "; });
+  t=t.replace(/\$\s*([\d.,]+)\s*(k)?\s*(?:or less|max|tops|ceiling)?/i,(m,n,k)=>{ if(out.maxPrice==null) out.maxPrice=Math.round(Number(n.replace(/,/g,""))*(k?1000:1)); return " "; });
+  t=t.replace(/\b((?:19|20)\d{2})\s*(?:-|to|–)\s*((?:19|20)\d{2})\b/,(m,a,b)=>{ out.minYear=Number(a); out.maxYear=Number(b); return " "; });
+  t=t.replace(/\b((?:19|20)\d{2})\s*\+|\b((?:19|20)\d{2})\s+or newer\b/i,(m,a,b)=>{ out.minYear=Number(a||b); return " "; });
+  t=t.replace(/\b(?:no|not|without|exclude|excluding)\s+([a-z][a-z0-9 ]{1,30}?)(?=,|;| and | or |$)/gi,(m,w)=>{ out.exclude.push(w.trim()); return " "; });
+  out.keywords=t.replace(/[,;]+/g," ").replace(/\s+/g," ").trim();
+  return out;
+}
+$("quick").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const text=$("quickText").value.trim(); if(!text) return;
+  if(!db){ toast("Saving isn't available in this view."); return; }
+  const p=parseQuick(text);
+  if(!p.keywords){ toast("Add a few words describing the item."); return; }
+  const ref=searches[0]||{}, now=new Date().toISOString();
+  const body={ name:p.keywords.replace(/\b\w/g,c=>c.toUpperCase()).slice(0,40), keywords:p.keywords, exclude:p.exclude.join(", "), category:"",
+    maxPrice:p.maxPrice, marketPrice:null, dealPct:RULES.dealPctDefault, minYear:p.minYear, maxYear:p.maxYear, maxMiles:null,
+    zip:ref.zip||"", radiusMi:150, shipOutside:true, areas:"denver, boulder, cosprings, fortcollins, rockies, westslope", extraUrls:[],
+    sources:[], mustHave:[], autoSites:true, pricing:null, alerts:"deals", active:true,
+    notes:`Quick search typed by Cameron: "${text}". Match whole items only, no parts or accessories. Collector: on the first run refine keywords, category and exclusions, pick the sites, write verifyNotes, choose the pricing mode, and record what you decided here.`,
+    createdAt:now, updatedAt:now };
+  const id=(p.keywords.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"search")+"-"+Math.random().toString(36).slice(2,6);
+  $("quickGo").disabled=true;
+  try{ await db.collection("searches").doc(id).set(body); selected=id; try{localStorage.setItem("ds.sel",id)}catch(e){} $("quickText").value=""; toast("Hunting. The collector picks it up on its next run."); }
+  catch(err){ toast("Couldn't save the search. Try again."); }
+  finally{ $("quickGo").disabled=false; }
+});
+$("newSearch").onclick=()=>openEditor(null);
+
+/* ---------- paste box ---------- */
+const HOST_SRC=[["facebook.com","fbmarketplace"],["craigslist.org","craigslist"],["cycletrader.com","cycletrader"],["ebay.com","ebay"],["autotrader.com","autotrader"],["powersports.com","powersports"],["motohunt.com","motohunt"],["revtero.com","revtero"],["sidelineswap.com","sidelineswap"],["powder7.com","powder7"]];
+function hash(s){ let h=2166136261; for(const c of s){ h^=c.charCodeAt(0); h=Math.imul(h,16777619); } return (h>>>0).toString(36); }
+function parseLine(line){
+  const url=(line.match(/https?:\/\/\S+/)||[])[0]||"";
+  let rest=line.replace(url,"").trim();
+  const price=(rest.match(/\$\s*([\d,]{2,})/)||[])[1]; rest=price?rest.replace(/\$\s*[\d,]{2,}/,"").trim():rest;
+  const year=(rest.match(/\b((?:19|20)\d{2})\b/)||[])[1];
+  const mi=(rest.match(/([\d,.]+)\s*(k)?\s*(?:mi|miles)\b/i)||[]); const milesV=mi[1]?Math.round(Number(mi[1].replace(/,/g,""))*(mi[2]?1000:1)):null;
+  if(mi[0]) rest=rest.replace(mi[0],"").trim();
+  let source="other", id=null;
+  try{ const h=new URL(url).hostname.replace(/^www\./,""); const m=HOST_SRC.find(([d])=>h.endsWith(d)); if(m) source=m[1];
+    const fb=url.match(/marketplace\/item\/(\d+)/), cl=url.match(/\/(\d{9,11})\.html/)||url.match(/\/view\/d\/[^/]+\/([A-Za-z0-9]{10,})/), ct=url.match(/listing\/[^/]*?-(\d{8,})/), eb=url.match(/\/itm\/(?:[^/]+\/)?(\d{9,})/), ss=url.match(/\/gear\/[^/]+\/[^/]+\/(\d{5,})/);
+    const key=(fb||cl||ct||eb||ss||[])[1]; id=source+"-"+(key||hash(url));
+  }catch(e){ id="paste-"+hash(line+Date.now()); }
+  const title=(rest.replace(/\s+/g," ").trim()||(url?`Pasted listing (${source})`:"Pasted listing")).slice(0,120);
+  return {id,source,url,title,price:price?Number(price.replace(/,/g,"")):null,year:year?Number(year):null,miles:milesV};
+}
+$("pasteGo").onclick=async()=>{
+  const s=current(); if(!s||!db) return;
+  const lines=$("pasteText").value.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+  if(!lines.length){ $("pasteNote").textContent="Nothing to add yet."; return; }
+  const now=new Date().toISOString(); let added=0, skipped=0;
+  $("pasteGo").disabled=true;
+  for(const line of lines){
+    const p=parseLine(line);
+    if(listings.some(l=>l.id===p.id)){ skipped++; continue; }
+    const doc={searchId:s.id, source:p.source, title:p.title, year:p.year, price:p.price, miles:p.miles, location:"", seller:"", sellerType:p.source==="fbmarketplace"||p.source==="craigslist"?"private":"", url:p.url, foundAt:now, status:"new", via:"paste", verified:false, needsEnrich:true, note:"Added by hand; the collector reads the ad and fills in the rest on its next run.", pasted:line.slice(0,500)};
+    try{ await db.collection("listings").doc(p.id).set(doc); added++; }catch(e){ skipped++; }
+  }
+  $("pasteGo").disabled=false; $("pasteText").value="";
+  $("pasteNote").textContent=`${added} added${skipped?`, ${skipped} skipped (already here or unreadable)`:""}.`;
+  toast(`${added} listing${added===1?"":"s"} added`);
+};
+$("fradius").addEventListener("change",()=>{ view.radius=$("fradius").value; saveView(); renderList(current()); });
+$("fzip").addEventListener("input",()=>{
+  const v=$("fzip").value.replace(/\D/g,"").slice(0,5); if(v!==$("fzip").value) $("fzip").value=v;
+  if(v.length===5 && GEO && !GEO.z[v]){ $("fzip").setAttribute("aria-invalid","true"); return; }
+  $("fzip").removeAttribute("aria-invalid");
+  if(v.length===5||v===""){ view.zip=v; saveView(); renderList(current()); }
+});
+["q","fsource","fstatus","fsort","fdeals"].forEach(id=>$(id).addEventListener(id==="q"?"input":"change",()=>renderList(current())));
+
+/* ---------- editor ---------- */
+let delArmed=false;
+function openEditor(s){
+  editingId=s?.id||null; delArmed=false;
+  $("edTitle").textContent=s?"Edit search":"New search";
+  const v=s||{dealPct:RULES.dealPctDefault, alerts:"deals", active:true, zip:searches[0]?.zip||"", radiusMi:150, shipOutside:true, autoSites:true, sources:[]};
+  $("e_name").value=v.name||""; $("e_keywords").value=v.keywords||""; $("e_exclude").value=v.exclude||""; $("e_category").value=v.category||"";
+  $("e_pricing").value=v.pricing==="per-item"?"per-item":"median";
+  $("e_maxPrice").value=v.maxPrice??""; $("e_marketPrice").value=v.marketPrice??""; $("e_dealPct").value=v.dealPct??RULES.dealPctDefault;
+  $("e_minYear").value=v.minYear??""; $("e_maxYear").value=v.maxYear??""; $("e_maxMiles").value=v.maxMiles??"";
+  $("e_zip").value=v.zip||""; $("e_radius").value=v.radiusMi??""; $("e_areas").value=v.areas||""; $("e_extra").value=(v.extraUrls||[]).join("\n");
+  $("e_shipOutside").checked=v.shipOutside===true; $("e_autoSites").checked=v.autoSites!==false;
+  $("e_alerts").value=v.alerts||"deals"; $("e_branded").value=String(v.allowBranded===true); $("e_active").value=String(v.active!==false); $("e_notes").value=v.notes||"";
+  const ids=allSiteIds();
+  $("e_sources").innerHTML=ids.map(id=>{ const x=site(id); return `<label><input type="checkbox" value="${esc(id)}" data-src="1"${(v.sources||[]).includes(id)?" checked":""}><span>${esc(x.name)}<small>${esc([x.kind, HOW[x.how]].filter(Boolean).join(" · "))}</small></span></label>`; }).join("");
+  $("e_delete").hidden=!s; $("e_delete").textContent="Delete search";
+  $("overlay").hidden=false; $("e_name").focus();
+}
+function closeEditor(){ $("overlay").hidden=true; editingId=null; }
+$("e_cancel").onclick=closeEditor;
+$("overlay").addEventListener("click",e=>{ if(e.target.id==="overlay") closeEditor(); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && !$("overlay").hidden) closeEditor(); });
+$("editor").addEventListener("submit", async e=>{
+  e.preventDefault();
+  if(!db){ toast("Saving isn't available in this view."); return; }
+  const body={ name:$("e_name").value.trim(), keywords:$("e_keywords").value.trim(), exclude:$("e_exclude").value.trim(), category:$("e_category").value.trim(),
+    pricing:$("e_pricing").value==="per-item"?"per-item":null,
+    maxPrice:num($("e_maxPrice").value), marketPrice:num($("e_marketPrice").value), dealPct:num($("e_dealPct").value)??RULES.dealPctDefault,
+    minYear:num($("e_minYear").value), maxYear:num($("e_maxYear").value), maxMiles:num($("e_maxMiles").value),
+    zip:$("e_zip").value.trim(), radiusMi:num($("e_radius").value), areas:$("e_areas").value.trim(), shipOutside:$("e_shipOutside").checked,
+    extraUrls:$("e_extra").value.split(/\s+/).map(x=>x.trim()).filter(x=>/^https?:\/\//.test(x)),
+    sources:[...document.querySelectorAll('#e_sources input[data-src]:checked')].map(x=>x.value), autoSites:$("e_autoSites").checked,
+    alerts:$("e_alerts").value, allowBranded:$("e_branded").value==="true", active:$("e_active").value==="true", notes:$("e_notes").value.trim(),
+    updatedAt:new Date().toISOString() };
+  $("e_save").disabled=true;
+  try{
+    if(editingId){ await db.collection("searches").doc(editingId).update(body); }
+    else { const id=(body.name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"search")+"-"+Math.random().toString(36).slice(2,6); await db.collection("searches").doc(id).set({...body, mustHave:[], createdAt:body.updatedAt}); selected=id; try{localStorage.setItem("ds.sel",id)}catch(e){} }
+    closeEditor(); toast("Search saved");
+  }catch(err){ toast(err?.code==="quota_exceeded"?"Storage is full. Delete old listings first.":"Couldn't save the search. Check the fields and try again."); }
+  finally{ $("e_save").disabled=false; }
+});
+$("e_delete").onclick=async()=>{
+  if(!delArmed){ delArmed=true; $("e_delete").textContent="Tap again to delete"; return; }
+  try{ await db.collection("searches").doc(editingId).delete(); closeEditor(); toast("Search deleted"); }catch(e){ toast("Couldn't delete the search."); }
+};
+
+/* ---------- data ---------- */
+(async()=>{
+  try{ db = await claude.use("db"); }catch(e){ db = null; }
+  if(!db){ $("status").textContent="Couldn't reach your data on GitHub. Check the connection and reload."; canWrite=false; archState="missing"; render(); return; }
+  let got={s:false,l:false};
+  const timer=setTimeout(()=>{ $("status").textContent="Still waiting for your data. It may be out of date."; },10000);
+  const done=()=>{ if(got.s&&got.l){ clearTimeout(timer); refreshMarkets(); let deals=0; searches.forEach(s=>{ deals+=openOf(s).filter(l=>score(l,s).isDeal).length; });
+    $("status").textContent=`${searches.length} search${searches.length===1?"":"es"} · ${listings.length} listing${listings.length===1?"":"s"} · ${deals} deal${deals===1?"":"s"}`; } };
+  const fail=e=>{ clearTimeout(timer); $("status").textContent=e?.code==="revoked"?"Access to this page's data ended.":"Couldn't load your data. Reload the page to try again."; };
+  db.collection("meta").onSnapshot(snap=>{ const d=snap.docs.find(x=>x.id==="rules"); applyRulesDoc(d?d.data():null); const a=snap.docs.find(x=>x.id==="architecture"); try{ setArch(a?a.data():null); }catch(e){ ARCH=null; archState="missing"; } refreshMarkets(); render(); }, ()=>{ ARCH=null; archState="missing"; if(tab==="how") render(); });
+  db.collection("searches").onSnapshot(snap=>{ searches=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||""))); if(!snap.metadata.fromCache) got.s=true; done(); render(); }, fail);
+  db.collection("listings").onSnapshot(snap=>{ listings=snap.docs.map(d=>({id:d.id,...d.data()})); if(!snap.metadata.fromCache) got.l=true; done(); render(); }, fail);
+  db.collection("runs").orderBy("at","desc").limit(100).onSnapshot(snap=>{ runs=snap.docs.map(d=>({id:d.id,...d.data()})); render(); }, ()=>{});
+  db.collection("sources").onSnapshot(snap=>{ health=snap.docs.map(d=>({id:d.id,...d.data()})); if(!snap.metadata.fromCache) healthLoaded=true; render(); }, ()=>{});
+})();
+(function boot(){ const h=(location.hash||"").replace("#",""); setTab(TABS.includes(h)?h:"brief", true); })();
+</script>
+
+
+
+</body></html>
