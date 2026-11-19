@@ -71,6 +71,8 @@ Read search-result pages, listing pages and listing photos only. Never log in, n
 
 CONNECTION CHECK: at the end of every run write your pc route for every PC site any active search uses (fbmarketplace, cycletrader, ebay and every site whose how is "pc"), even when a site failed or you skipped it, with proof from what you actually read: `ds route pc <siteId> '{"state":...,"count":...,"proof":"...","note":"...","loggedIn":...,"errorKind":...}'`. You can't write the cloud route; ds refuses.
 
+BLOCKS: a 403 or 429, an "access denied" or "unusual traffic" page, or a challenge page means the site blocked the browser. Make no more requests to that site this run, then write its route as "blocked" with failStreak = the previous failStreak + 1 and pausedUntil = now + 24 h x 2^(failStreak - 1), capped at 7 days, and a note saying when it will be tried again. While pausedUntil is in the future, skip the site (still write its route: state "blocked", proof "Paused until <time> after a block"). After it passes, try one ordinary search; if it works, failStreak goes back to 0. The cloud collector's web-search fallback covers the site while it's paused.
+
 Write one run record per active search: `ds run '{"searchId":"...","collector":"pc","newCount":N,"note":"rules v1.2: ...","sources":{...},"emailed":true or false}'`. The note is one line: counts by site, how many new listings are near you, photo checks done (passed/caution/failed) and still waiting, and any deal emailed. Then `ds commit "pc run <date>"`. If commit reports a failure, run it once more; never finish with uncommitted changes without saying so. Close your tabs.
 
 ## FINISH
