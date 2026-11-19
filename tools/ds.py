@@ -16,6 +16,8 @@ Commands (run `ds.py help` for the list):
   listings <searchId> [filters]    one line per listing
   get <id>                         one listing as JSON (status included)
   score <searchId>                 market price and every deal-priced listing
+  queue <searchId> refresh [--for cloud|pc]   what to re-open this run, in order, capped
+  queue <searchId> photos          what needs a photo check or price re-confirm, best deal first
   zip <zip> | city "<City, ST>"    coordinates; dist <lat> <lng> [--zip Z] miles
   upsert '<json>' | upsert -       add or update listings (object or array)
   check <id> '<json>'              set a listing's legitimacy check
@@ -258,7 +260,16 @@ def score(l, s, market, nums):
     fresh = hours_since(confirmed) <= nums.get("priceFreshHours", 24)
     is_deal = under_market and under_ceiling and reachable and verified and not brand and passed and fresh
     lead = under_market and under_ceiling and reachable and not brand and not is_deal and not failed
+    # What a lead is waiting on (v2.1). A caution verdict is settled until the price changes after it or it
+    # passes numbers.recheckCheckDays; until then it is not photo work, it is "has concerns" for Cameron.
+    chk_at = chk.get("at") or ""
+    settled = (chk.get("status") == "caution" and hours_since(chk_at) <= nums.get("recheckCheckDays", 7) * 24
+               and str(l.get("priceChangedAt") or "") <= chk_at)
+    concern = lead and settled
+    reconfirm = lead and passed and not fresh
+    photo_work = lead and not passed and not settled
     return {"pct": pct, "ref": ref, "cost": cost, "isDeal": is_deal, "lead": lead, "checkFailed": failed,
+            "concern": concern, "reconfirm": reconfirm, "photoWork": photo_work,
             "needLevel": need, "branded": brand, "underMarket": under_market, "underCeiling": under_ceiling,
             "inRadius": in_radius, "homeDist": None if home is None else round(home), "fresh": fresh,
             "checkPassed": passed}
@@ -386,6 +397,15 @@ def op_route(st, collector, site, route, at):
     else:
         route.setdefault("lastOk", prev.get("lastOk"))
         route.setdefault("failStreak", int(prev.get("failStreak") or 0) + 1)
+    # Known issue 9c (v2.1): a cloud site whose pages stay refused even when opened from a search result
+    # for 3 runs in a row gets flagged for a move to the PC. Cameron or a build chat changes `how`.
+    if collector == "cloud" and route.get("errorKind") == "refused":
+        route["refusedStreak"] = int(prev.get("refusedStreak") or 0) + 1
+        if route["refusedStreak"] >= 3:
+            route["movePc"] = True
+    else:
+        route.pop("refusedStreak", None)
+        route.pop("movePc", None)
     s[collector] = route
     st.write("sites.json", sites)
     return f"{site}: {collector} route {route['state']}"
@@ -547,6 +567,10 @@ def line(l, sc=None):
     bits.append(f"check {ck.get('status', 'none')}{('/L' + str(ck.get('level'))) if ck.get('level') else ''}")
     if sc and sc.get("isDeal"):
         bits.append("DEAL")
+    elif sc and sc.get("reconfirm"):
+        bits.append("price needs re-confirming")
+    elif sc and sc.get("concern"):
+        bits.append("caution (settled)")
     elif sc and sc.get("lead"):
         bits.append(f"needs L{sc['needLevel']} check")
     if l.get("gone"):
@@ -567,13 +591,15 @@ def cmd_summary(st):
         mk = market_for(s, sid, L, nums)
         open_ = [l for l in mine.values() if not l.get("gone") and l.get("status") != "passed"]
         scored = [(l, score(l, s, mk, nums)) for l in open_]
-        leads = [x for x in scored if x[1]["lead"]]
+        leads = [x for x in scored if x[1]["photoWork"] or x[1]["reconfirm"]]
+        concerns = [x for x in scored if x[1]["concern"]]
         deals = [x for x in scored if x[1]["isDeal"]]
         pend = [l for l in open_ if (l.get("check") or {}).get("status") == "pending"]
-        stale = [l for l in open_ if hours_since(l.get("lastChecked") or l.get("lastSeen") or "") > nums.get("refreshHours", 12)]
+        stale = [l for l, sc in scored if refresh_due(l, sc, nums)[0]]
         print(f"\n[{sid}] {s.get('name')} · {'active' if s.get('active') else 'PAUSED'} · sources {','.join(s.get('sources') or [])}")
         print(f"  {len(open_)} open · market {money(mk['value']) if mk['value'] else '-'} ({mk['basis']}) · "
-              f"{len(deals)} deals · {len(leads)} deal-priced needing checks · {len(pend)} pending checks · {len(stale)} due for refresh")
+              f"{len(deals)} deals · {len(leads)} deal-priced needing checks · {len(concerns)} with concerns (caution) · "
+              f"{len(pend)} pending checks · {len(stale)} due for refresh")
     print("\nSITES (route state, last read)")
     for sid, s in sorted(st.sites().items()):
         rs = []
@@ -617,7 +643,7 @@ def cmd_listings(st, argv):
         sc = score(l, s, mk, nums)
         if "--leads" in argv and not (sc["lead"] and open_):
             continue
-        if "--stale" in argv and not (open_ and hours_since(l.get("lastChecked") or l.get("lastSeen") or "") > nums.get("refreshHours", 12)):
+        if "--stale" in argv and not (open_ and refresh_due(l, sc, nums)[0]):
             continue
         rows.append((l, sc))
     rows.sort(key=lambda x: (x[1]["pct"] is None, -(x[1]["pct"] or 0)))
@@ -627,6 +653,71 @@ def cmd_listings(st, argv):
         for l, sc in rows:
             print(line(l, sc))
         print(f"({len(rows)} listings)")
+
+
+def refresh_due(l, sc, nums):
+    """Hours after which an open listing is due for a price refresh: numbers.refreshHours, or
+    numbers.refreshHoursSlow when it is priced more than numbers.slowOverPct% over its reference."""
+    slow = sc["pct"] is not None and sc["pct"] < -nums.get("slowOverPct", 15) / 100
+    limit = nums.get("refreshHoursSlow", 72) if slow else nums.get("refreshHours", 12)
+    return hours_since(l.get("lastChecked") or l.get("lastSeen") or "") > limit, slow
+
+
+def collector_sources(st, who):
+    if not who:
+        return None
+    return {k for k, v in st.sites().items() if (v.get("how") or "cloud") == who}
+
+
+def cmd_queue(st, argv):
+    """queue <searchId> refresh|photos [--for cloud|pc] [--all] [--json]
+    refresh: open listings due for a price refresh, in the rules' order, capped at numbers.maxRefreshPerRun.
+    photos:  deal-priced listings that need the PC's photo check or a price re-confirm, best deal first."""
+    if len(argv) < 2 or argv[1] not in ("refresh", "photos"):
+        die("queue <searchId> refresh|photos [--for cloud|pc] [--all] [--json]")
+    sid, kind = argv[0], argv[1]
+    s = st.searches().get(sid) or die(f"no search {sid}")
+    nums = st.rules().get("numbers", {})
+    L = st.all_listings()
+    mk = market_for(s, sid, L, nums)
+    who = argv[argv.index("--for") + 1] if "--for" in argv else None
+    srcs = collector_sources(st, who) if kind == "refresh" else None
+    rows = []
+    for l in L.values():
+        if l.get("searchId") != sid or l.get("gone") or l.get("status") == "passed":
+            continue
+        if srcs is not None and l.get("source") not in srcs:
+            continue
+        sc = score(l, s, mk, nums)
+        if kind == "photos":
+            if not (sc["photoWork"] or sc["reconfirm"]):
+                continue
+            why = "re-confirm price" if sc["reconfirm"] else (f"L{sc['needLevel']} check" + ("" if l.get("verified") is not False else ", ad not opened yet"))
+            rows.append((l, sc, (0 if sc["reconfirm"] else 1, -(sc["pct"] or 0), sc["homeDist"] if sc["homeDist"] is not None else 1e9), why))
+        else:
+            # Order (v2.1): deal-priced leads, then listings Cameron marked, then everything else that is due,
+            # oldest first. Unverified listings count as due but no longer jump the queue: shop cards the
+            # reader can't open were filling every slot.
+            due, slow = refresh_due(l, sc, nums)
+            unv = l.get("verified") is False
+            if not (due or sc["lead"] or unv):
+                continue
+            tier = 0 if sc["lead"] else 1 if l.get("status") in ("watching", "contacted") else 2
+            if tier == 1 and not due:
+                continue
+            last = l.get("lastChecked") or l.get("lastSeen") or ""
+            why = ["deal-priced", "you marked it", "unverified" if unv else ("slow tier" if slow else "due")][tier]
+            rows.append((l, sc, (tier, last), why))
+    rows.sort(key=lambda x: x[2])
+    total = len(rows)
+    if kind == "refresh" and "--all" not in argv:
+        rows = rows[: int(nums.get("maxRefreshPerRun", 25))]
+    if "--json" in argv:
+        print(json.dumps([dict(l, _score=sc, _why=why) for l, sc, _, why in rows], indent=1, ensure_ascii=False))
+        return
+    for l, sc, _, why in rows:
+        print(line(l, sc) + f" | {why}")
+    print(f"({len(rows)} of {total} {'due for refresh' if kind == 'refresh' else 'needing photo checks or a price re-confirm'})")
 
 
 def cmd_score(st, sid):
@@ -677,6 +768,8 @@ def main():
         print(json.dumps(L.get(a[0]) or die(f"no listing {a[0]}"), indent=1, ensure_ascii=False))
     elif c == "score":
         cmd_score(st, a[0])
+    elif c == "queue":
+        cmd_queue(st, a)
     elif c == "zip":
         print(json.dumps(zip_coords(a[0])))
     elif c == "city":
