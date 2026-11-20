@@ -233,6 +233,29 @@ def branded(l, words):
     return bool(re.search(pat, str(l.get("title") or ""), re.I))
 
 
+# ---------------------------------------------------------------- search limits (v2.5, mirrors itemOutside() in index.html)
+def item_outside(l, s):
+    """Which of the search's item limits a listing is outside: "year" (minYear/maxYear) and "miles" (maxMiles).
+    An unknown year or miles never counts. score() adds "price" (over maxPrice) and "ship" (shipOutside, past
+    radiusMi and ships is false). Year and miles also keep a listing out of the market median; the ceiling and
+    the ship rule don't, since they are about Cameron, not the market. Exclude words stay with the collector."""
+    lo, hi = num(s.get("minYear")), num(s.get("maxYear"))
+    if lo is not None and hi is not None and lo > hi:
+        lo, hi = hi, lo
+    y, m, mx = num(l.get("year")), num(l.get("miles")), num(s.get("maxMiles"))
+    out = []
+    if y is not None and ((lo is not None and y < lo) or (hi is not None and y > hi)):
+        out.append("year")
+    if m is not None and mx is not None and m > mx:
+        out.append("miles")
+    return out
+
+
+def outside_hidden(l, sc):
+    """Outside the search's limits and not marked watching or contacted: out of the open list (page: Status: Outside search)."""
+    return bool(sc.get("outside")) and (l.get("status") or "new") == "new"
+
+
 def market_for(s, sid, listings, nums):
     if s.get("pricing") == "per-item":
         return {"value": None, "perItem": True, "basis": "each listing against its own model's fair used price"}
@@ -242,7 +265,7 @@ def market_for(s, sid, listings, nums):
     prices = sorted(float(l["price"]) for l in listings.values()
                     if l.get("searchId") == sid and l.get("status") != "passed" and not l.get("gone")
                     and not branded(l, nums.get("brandedWords", [])) and (l.get("check") or {}).get("status") != "failed"
-                    and num(l.get("price")))
+                    and num(l.get("price")) and not item_outside(l, s))
     if not prices:
         return {"value": None, "basis": "no listings yet"}
     n = len(prices)
@@ -276,8 +299,14 @@ def score(l, s, market, nums):
     confirmed = max([x for x in (l.get("lastChecked"), l.get("lastSeen"), chk.get("at")) if x] or [""])
     fresh = hours_since(confirmed) <= nums.get("priceFreshHours", 24)
     live = not l.get("gone")
-    is_deal = live and under_market and under_ceiling and reachable and verified and not brand and passed and fresh
-    lead = live and under_market and under_ceiling and reachable and not brand and not is_deal and not failed
+    outside = item_outside(l, s)
+    if ceiling is not None and cost is not None and cost > ceiling:
+        outside.append("price")
+    if not reachable:
+        outside.append("ship")
+    fits = not outside
+    is_deal = live and fits and under_market and under_ceiling and reachable and verified and not brand and passed and fresh
+    lead = live and fits and under_market and under_ceiling and reachable and not brand and not is_deal and not failed
     # What a lead is waiting on (v2.1). A caution verdict is settled until the price changes after it or it
     # passes numbers.recheckCheckDays; until then it is not photo work, it is "has concerns" for Cameron.
     chk_at = chk.get("at") or ""
@@ -290,7 +319,7 @@ def score(l, s, market, nums):
             "concern": concern, "reconfirm": reconfirm, "photoWork": photo_work,
             "needLevel": need, "branded": brand, "underMarket": under_market, "underCeiling": under_ceiling,
             "inRadius": in_radius, "homeDist": None if home is None else round(home), "fresh": fresh,
-            "checkPassed": passed}
+            "checkPassed": passed, "outside": outside}
 
 
 # ---------------------------------------------------------------- probably gone (v2.4, mirrors probablyGone() in index.html)
@@ -688,6 +717,8 @@ def line(l, sc=None):
         bits.append("GONE")
     elif sc and sc.get("probablyGone") is not None:
         bits.append(f"PROBABLY GONE (unseen {sc['probablyGone']} d)")
+    elif sc and sc.get("outside"):
+        bits.append("OUTSIDE SEARCH (" + ", ".join(sc["outside"]) + ")")
     if l.get("status") not in (None, "new"):
         bits.append(l["status"])
     bits.append(f"seen {str(l.get('lastSeen') or '')[:16]}")
@@ -705,7 +736,8 @@ def cmd_summary(st):
         sites = st.sites()
         live = [(l, score(l, s, mk, nums)) for l in mine.values() if not l.get("gone") and l.get("status") != "passed"]
         pg = [l for l, sc in live if probably_gone(l, sc, sites, nums) is not None]
-        scored = [(l, sc) for l, sc in live if probably_gone(l, sc, sites, nums) is None]
+        outs = [l for l, sc in live if probably_gone(l, sc, sites, nums) is None and outside_hidden(l, sc)]
+        scored = [(l, sc) for l, sc in live if probably_gone(l, sc, sites, nums) is None and not outside_hidden(l, sc)]
         open_ = [l for l, _ in scored]
         leads = [x for x in scored if x[1]["photoWork"] or x[1]["reconfirm"]]
         concerns = [x for x in scored if x[1]["concern"]]
@@ -715,7 +747,8 @@ def cmd_summary(st):
         print(f"\n[{sid}] {s.get('name')} · {'active' if s.get('active') else 'PAUSED'} · sources {','.join(s.get('sources') or [])}")
         print(f"  {len(open_)} open · market {money(mk['value']) if mk['value'] else '-'} ({mk['basis']}) · "
               f"{len(deals)} deals · {len(leads)} deal-priced needing checks · {len(concerns)} with concerns (caution) · "
-              f"{len(pend)} pending checks · {len(stale)} due for refresh · {len(pg)} probably gone (hidden)")
+              f"{len(pend)} pending checks · {len(stale)} due for refresh · {len(pg)} probably gone (hidden) · "
+              f"{len(outs)} outside the search's limits (hidden)")
     print("\nSITES (route state, last read)")
     for sid, s in sorted(st.sites().items()):
         rs = []
@@ -739,7 +772,7 @@ def cmd_summary(st):
 
 def cmd_listings(st, argv):
     if not argv:
-        die("listings <searchId> [--source S] [--open] [--pending] [--leads] [--stale] [--json]  (--open leaves out gone, passed and probably gone)")
+        die("listings <searchId> [--source S] [--open] [--pending] [--leads] [--stale] [--json]  (--open leaves out gone, passed, probably gone and outside the search's limits)")
     sid = argv[0]
     s = st.searches().get(sid) or die(f"no search {sid}")
     nums = st.rules().get("numbers", {})
@@ -754,7 +787,7 @@ def cmd_listings(st, argv):
             continue
         sc = score(l, s, mk, nums)
         sc["probablyGone"] = probably_gone(l, sc, sites, nums)
-        open_ = not l.get("gone") and l.get("status") != "passed" and sc["probablyGone"] is None
+        open_ = not l.get("gone") and l.get("status") != "passed" and sc["probablyGone"] is None and not outside_hidden(l, sc)
         if "--open" in argv and not open_:
             continue
         if "--pending" in argv and (l.get("check") or {}).get("status") != "pending":
@@ -817,6 +850,9 @@ def cmd_queue(st, argv):
             # Order (v2.1): deal-priced leads, then listings Cameron marked, then everything else that is due,
             # oldest first. Unverified listings count as due but no longer jump the queue: shop cards the
             # reader can't open were filling every slot.
+            # v2.5: a listing outside the search's limits isn't refreshed unless Cameron marked it.
+            if outside_hidden(l, sc):
+                continue
             due, slow = refresh_due(l, sc, nums)
             unv = l.get("verified") is False
             if not (due or sc["lead"] or unv):
@@ -848,16 +884,19 @@ def cmd_score(st, sid):
     mk = market_for(s, sid, L, nums)
     print(f"{s.get('name')}: market {money(mk['value']) if mk['value'] else '-'} ({mk['basis']}); deal = "
           f"{num(s.get('dealPct')) or nums.get('dealPctDefault')}% under, ceiling {money(s.get('maxPrice'))}, near-you {s.get('radiusMi')} mi of {s.get('zip')}")
-    n = 0
+    n = outs = 0
     for l in L.values():
         if l.get("searchId") != sid or l.get("gone") or l.get("status") == "passed":
             continue
         sc = score(l, s, mk, nums)
+        if outside_hidden(l, sc):
+            outs += 1
+            continue
         if sc["underMarket"] or sc["isDeal"]:
             n += 1
             print(line(l, sc) + f" | ref {money(sc['ref'])} cost {money(sc['cost'])}"
                   f"{' | branded' if sc['branded'] else ''}{'' if sc['fresh'] else ' | price not confirmed in ' + str(nums.get('priceFreshHours')) + ' h'}")
-    print(f"({n} deal-priced)")
+    print(f"({n} deal-priced; {outs} outside the search's limits left out, never deals)")
 
 
 def parse_json_arg(a):
