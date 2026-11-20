@@ -73,6 +73,9 @@
   var listeners = [];      // {name, q, cb, err}
   var pollTimer = null;
   var loading = null;
+  var hadErr = false;      // the last refresh failed; the next good one tells every listener, changed or not
+  var writeGen = 0;        // counts the page's own writes
+  var pathGen = {};        // path -> writeGen of the page's last write to it
 
   function fileJson(path, dflt) { var f = files[path]; return f ? f.json : dflt; }
 
@@ -81,13 +84,19 @@
       .then(function (j) { arch = j; }).catch(function () { arch = null; });
   }
 
+  // A read that started before one of the page's own writes must not put the older copy back
+  // (it made a Watch tap flip back for a minute). Paths written since the read began are left alone.
+  function writtenSince(gen, p) { return (pathGen[p] || 0) > gen; }
+
   function refresh(force) {
     if (loading) return loading;
+    var startGen = writeGen, skipped = false;
     loading = (function () {
       var path = "/repos/" + repo() + "/git/trees/" + BRANCH + "?recursive=1";
       return gh("GET", path, undefined, (!force && treeEtag) ? { "If-None-Match": treeEtag } : null).then(function (r) {
         if (r.status === 304) return false;
         if (r.status === 401) throw DbError("unauthenticated", "GitHub didn't accept the token.");
+        if ((r.status === 403 && (r.headers.get("x-ratelimit-remaining") === "0" || r.headers.get("retry-after"))) || r.status === 429) throw DbError("unavailable", "GitHub's hourly limit was reached; the page tries again soon.");
         if (r.status === 403 || r.status === 404) throw DbError("no_access", "The token can't read " + repo() + ".");
         if (!r.ok) throw DbError("unavailable", "GitHub answered " + r.status + ".");
         treeEtag = r.headers.get("ETag");
@@ -97,23 +106,29 @@
           var jobs = want.map(function (e) {
             keep[e.path] = true;
             if (files[e.path] && files[e.path].sha === e.sha) return null;
+            if (writtenSince(startGen, e.path)) { skipped = true; return null; }
             return gh("GET", "/repos/" + repo() + "/git/blobs/" + e.sha, undefined, { "Accept": "application/vnd.github.raw+json" })
               .then(function (br) {
                 if (!br.ok) throw DbError("unavailable", "Couldn't read " + e.path + " (" + br.status + ").");
                 return br.text();
               })
-              .then(function (txt) { files[e.path] = { sha: e.sha, json: JSON.parse(txt) }; });
+              .then(function (txt) {
+                if (writtenSince(startGen, e.path)) { skipped = true; return; }
+                files[e.path] = { sha: e.sha, json: JSON.parse(txt) };
+              });
           }).filter(Boolean);
-          Object.keys(files).forEach(function (p) { if (!keep[p]) delete files[p]; });
+          Object.keys(files).forEach(function (p) { if (!keep[p] && !writtenSince(startGen, p)) delete files[p]; });
           return Promise.all(jobs).then(function () { return true; });
         });
       });
     })().then(function (changed) {
       loaded = true; loading = null;
-      if (changed) notifyAll();
+      if (skipped) treeEtag = null;   // read the tree again next time, now that the page's write has landed
+      if (changed || hadErr) notifyAll();
+      hadErr = false;
       return changed;
     }, function (err) {
-      loading = null;
+      loading = null; hadErr = true;
       if (err && err.code === "unauthenticated") { showSetup("Your GitHub token stopped working (it may have expired). Paste a new one."); }
       listeners.forEach(function (l) { if (l.err) try { l.err(err); } catch (e) {} });
       throw err;
@@ -152,11 +167,14 @@
           seen[id] = true; out.push({ id: id, data: d });
         });
       });
+      // A pasted link no collector has read yet is flagged pastedOnly, so the page keeps it out of the
+      // median price (ds.py never sees pasted.json when it prices, and the two must agree).
       var pasted = fileJson("pasted.json", {});
       Object.keys(pasted).forEach(function (id) {
         if (seen[id]) return;
         var d = Object.assign({}, pasted[id]);
         d.status = (status[id] && status[id].status) || d.status || "new";
+        d.pastedOnly = true;
         out.push({ id: id, data: d });
       });
     }
@@ -207,6 +225,7 @@
       return gh("PUT", "/repos/" + repo() + "/contents/" + path, body).then(function (r) {
         if (r.ok) return r.json().then(function (j) {
           files[path] = { sha: j.content && j.content.sha, json: next };
+          pathGen[path] = ++writeGen;
           treeEtag = null; notifyAll();
         });
         if ((r.status === 409 || r.status === 422) && tries < 3) {
@@ -296,7 +315,7 @@
       "#ghSetup h2{font:600 21px/1.25 'Source Serif 4',Georgia,serif;margin:0 0 8px}" +
       "#ghSetup ol{margin:8px 0 12px 20px;padding:0}#ghSetup li{margin:3px 0}" +
       "#ghSetup a{color:#ad522b}#ghSetup code{font:13px 'IBM Plex Mono',monospace;background:#e9e2d4;padding:0 4px;border-radius:3px}" +
-      "#ghSetup input{width:100%;box-sizing:border-box;font:14px 'IBM Plex Mono',monospace;padding:9px 10px;border:1px solid #c9bea8;border-radius:4px;background:#fffdf8;color:#14263d}" +
+      "#ghSetup input{width:100%;box-sizing:border-box;font:16px 'IBM Plex Mono',monospace;padding:9px 10px;border:1px solid #c9bea8;border-radius:4px;background:#fffdf8;color:#14263d}" +
       "#ghSetup button{margin-top:10px;background:#14263d;color:#f3efe6;border:0;border-radius:4px;padding:9px 16px;font:600 14px 'Source Sans 3',system-ui,sans-serif;cursor:pointer}" +
       "#ghSetup .gh-err{color:#a33a2a;min-height:1.4em;margin-top:8px;font-size:14px}#ghSetup .gh-fine{font-size:13px;color:#4c5b6e;margin-top:6px}";
     document.head.appendChild(css);

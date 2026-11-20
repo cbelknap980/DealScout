@@ -31,15 +31,23 @@ Commands (run `ds.py help` for the list):
   commit "<message>"               push everything recorded since the last commit
 """
 import json, math, os, re, subprocess, sys, time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 OPS = ".ds-ops.jsonl"
+REPLAY = ".ds-replay"  # present only while commit is replaying; if a run dies there, the next commit starts over
 COLLECTOR = os.environ.get("DS_COLLECTOR", "")  # "cloud" or "pc"
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def now_iso():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def parse_iso(iso):
+    try:
+        return datetime.strptime(str(iso)[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
 
 
 def die(msg, code=2):
@@ -161,12 +169,21 @@ def zip_coords(z):
     return geo()["z"].get(z) if re.fullmatch(r"\d{5}", z) else None
 
 
+def city_alias(city):
+    """"St. Paul" and "Saint Paul" are one town; geo.json has most in the long form and a few as "st james"
+    (same lookups as coordsFor() in index.html)."""
+    for a, b in ((r"^st\.?\s+", "saint "), (r"^ste\.?\s+", "sainte "), (r"^ft\.?\s+", "fort "), (r"^mt\.?\s+", "mount ")):
+        city = re.sub(a, b, city)
+    return city
+
+
 def city_coords(loc):
     m = re.match(r"^\s*([^,]+?),\s*([A-Za-z]{2})\b", str(loc or ""))
     if not m:
         return None
-    key = re.sub(r"\s+", " ", m.group(1).strip().lower()) + "|" + m.group(2).upper()
-    return geo()["c"].get(key)
+    city, st = re.sub(r"\s+", " ", m.group(1).strip().lower()), "|" + m.group(2).upper()
+    c = geo()["c"]
+    return c.get(city + st) or c.get(city.replace(".", "") + st) or c.get(city_alias(city) + st)
 
 
 def coords_for(l):
@@ -258,8 +275,9 @@ def score(l, s, market, nums):
     failed = chk.get("status") == "failed"
     confirmed = max([x for x in (l.get("lastChecked"), l.get("lastSeen"), chk.get("at")) if x] or [""])
     fresh = hours_since(confirmed) <= nums.get("priceFreshHours", 24)
-    is_deal = under_market and under_ceiling and reachable and verified and not brand and passed and fresh
-    lead = under_market and under_ceiling and reachable and not brand and not is_deal and not failed
+    live = not l.get("gone")
+    is_deal = live and under_market and under_ceiling and reachable and verified and not brand and passed and fresh
+    lead = live and under_market and under_ceiling and reachable and not brand and not is_deal and not failed
     # What a lead is waiting on (v2.1). A caution verdict is settled until the price changes after it or it
     # passes numbers.recheckCheckDays; until then it is not photo work, it is "has concerns" for Cameron.
     chk_at = chk.get("at") or ""
@@ -387,16 +405,39 @@ def op_route(st, collector, site, route, at):
         die(f"route: you are the {COLLECTOR} collector; you may only write the {COLLECTOR} route")
     if route.get("state") not in ROUTE_STATES:
         die("route: state must be one of " + ", ".join(sorted(ROUTE_STATES)))
+    if "searches" in route and not (isinstance(route["searches"], list) and all(isinstance(x, str) for x in route["searches"])):
+        die("route: searches must be a list of search ids (leave it out when the read covered every search)")
     sites = st.sites()
     s = sites.setdefault(site, {})
     prev = s.get(collector) or {}
     route.setdefault("at", at)
-    if route["state"] == "ok":
+    state = route["state"]
+    # failStreak: runs in a row that were not "ok" (an "off" route is not in use, so it resets).
+    # blockStreak (v2.3): blocks in a row; an ok or partial read ends it, other states leave it as it was.
+    # Only blocks set a pause: numbers.blockPauseHours x 2^(blockStreak - 1), capped at blockPauseMaxHours.
+    # A route rewritten while its pause is still running keeps the pause (the run skipped the site).
+    prev_pause = prev.get("pausedUntil")
+    t_at, t_pause = parse_iso(route["at"]), parse_iso(prev_pause)
+    pause_running = bool(t_at and t_pause and t_pause > t_at)
+    if state == "ok":
         route.setdefault("lastOk", at)
         route.setdefault("failStreak", 0)
+        route.setdefault("blockStreak", 0)
     else:
         route.setdefault("lastOk", prev.get("lastOk"))
-        route.setdefault("failStreak", int(prev.get("failStreak") or 0) + 1)
+        route.setdefault("failStreak", 0 if state == "off" else int(prev.get("failStreak") or 0) + 1)
+        if state in ("partial", "off"):
+            route.setdefault("blockStreak", 0)
+        elif state == "blocked" and not pause_running:
+            nums = st.rules().get("numbers", {})
+            bs = route.setdefault("blockStreak", int(prev.get("blockStreak") or 0) + 1)
+            if "pausedUntil" not in route and t_at:
+                hours = min(float(nums.get("blockPauseHours", 24)) * 2 ** (max(int(bs), 1) - 1), float(nums.get("blockPauseMaxHours", 168)))
+                route["pausedUntil"] = (t_at + timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        else:
+            route.setdefault("blockStreak", int(prev.get("blockStreak") or (1 if pause_running else 0)))
+            if pause_running:
+                route.setdefault("pausedUntil", prev_pause)
     # Known issue 9c (v2.1): a cloud site whose pages stay refused even when opened from a search result
     # for 3 runs in a row gets flagged for a move to the PC. Cameron or a build chat changes `how`.
     if collector == "cloud" and route.get("errorKind") == "refused":
@@ -501,11 +542,35 @@ def git(st, *args, check=True):
 def ensure_ignore(st):
     gi = st.path(".gitignore")
     lines = open(gi).read().splitlines() if os.path.exists(gi) else []
-    for want in (OPS, "*.tmp", ".ds-collector"):
+    for want in (OPS, REPLAY, "*.tmp", ".ds-collector"):
         if want not in lines:
             lines.append(want)
     with open(gi, "w") as f:
         f.write("\n".join(lines) + "\n")
+
+
+def replay(st, ops):
+    """Put origin/main in place and re-apply every recorded change on top. A change that no longer
+    applies (its listing or search was removed meanwhile) is skipped and reported; it never stops the
+    replay halfway. The .ds-replay marker exists only while this runs, so a run that dies in here is
+    redone from the start by the next commit instead of pushing a half-replayed copy."""
+    with open(st.path(REPLAY), "w") as f:
+        f.write(now_iso() + "\n")
+    git(st, "reset", "-q", "--hard", "origin/main")
+    st.reset_cache()
+    skipped = []
+    for o in ops:
+        try:
+            OPS_FN[o["op"]](st, json.loads(json.dumps(o["args"])), o["at"])
+        except (SystemExit, Exception) as e:  # die() raises SystemExit
+            skipped.append(f"{o['op']} {json.dumps(o['args'], ensure_ascii=False)[:100]}")
+            if not isinstance(e, SystemExit):
+                print(f"ds.py: {o['op']} failed on replay: {e}", file=sys.stderr)
+    ensure_ignore(st)
+    os.remove(st.path(REPLAY))
+    for x in skipped:
+        print("ds.py: skipped, no longer applies: " + x, file=sys.stderr)
+    return skipped
 
 
 def commit(st, message):
@@ -516,12 +581,22 @@ def commit(st, message):
     who = COLLECTOR or "build"
     git(st, "config", "user.name", f"Deal Scout {who}")
     git(st, "config", "user.email", "noreply@anthropic.com")
+    skipped = []
+    if os.path.exists(st.path(REPLAY)):
+        print("ds.py: the last commit stopped partway through a replay; replaying again from origin/main", file=sys.stderr)
+        skipped = replay(st, ops)
     ensure_ignore(st)
     msg = f"[{who}] {message}"
     for attempt in range(1, 7):
         git(st, "add", "-A")
         if git(st, "diff", "--cached", "--quiet", check=False).returncode != 0:
             git(st, "commit", "-q", "-m", msg)
+        ahead = git(st, "rev-list", "--count", "origin/main..HEAD", check=False)
+        if ahead.returncode == 0 and ahead.stdout.strip() == "0":
+            os.remove(st.path(OPS))
+            print(f"nothing new to push: {len(ops)} recorded change(s) already match origin/main"
+                  + (f" ({len(skipped)} skipped)" if skipped else ""))
+            return
         r = git(st, "push", "-q", "origin", "HEAD:main", check=False)
         landed = r.returncode == 0
         if not landed:
@@ -530,16 +605,13 @@ def commit(st, message):
             landed = git(st, "merge-base", "--is-ancestor", "HEAD", "origin/main", check=False).returncode == 0
         if landed:
             os.remove(st.path(OPS))
-            print(f"pushed: {msg} ({len(ops)} change(s), attempt {attempt})")
+            print(f"pushed: {msg} ({len(ops) - len(skipped)} change(s)"
+                  + (f", {len(skipped)} skipped" if skipped else "") + f", attempt {attempt})")
             return
         # someone pushed first: take their copy and replay our changes on top
         time.sleep(2 * attempt)
         git(st, "fetch", "-q", "--depth=50", "origin", "main")
-        git(st, "reset", "-q", "--hard", "origin/main")
-        st.reset_cache()
-        for o in ops:
-            OPS_FN[o["op"]](st, json.loads(json.dumps(o["args"])), o["at"])
-        ensure_ignore(st)
+        skipped = replay(st, ops)
     die("push still rejected after 6 tries; changes are kept in .ds-ops.jsonl, run ds.py commit again", 1)
 
 
@@ -759,6 +831,26 @@ def main():
         print(__doc__)
         return
     c, a = argv[0], argv[1:]
+    need = {"get": 1, "score": 1, "zip": 1, "city": 1, "dist": 4, "upsert": 1, "check": 2, "gone": 1,
+            "alerted": 1, "route": 3, "site": 2, "search": 2, "run": 1, "unpaste": 1, "listings": 1}
+    if len(a) < need.get(c, 0):
+        die(usage(c))
+    try:
+        dispatch(st, c, a)
+    except json.JSONDecodeError as e:
+        die(f"{c}: that JSON doesn't parse ({e}). {usage(c)}")
+
+
+def usage(c):
+    """The command's line from the list at the top of this file."""
+    for ln in __doc__.splitlines():
+        t = ln.strip()
+        if re.search(r"(^|[;|]\s*)" + re.escape(c) + r"\b", t):
+            return "usage: ds.py " + re.sub(r"\s{2,}", "   # ", t)
+    return "run ds.py help for the list of commands"
+
+
+def dispatch(st, c, a):
     if c == "summary":
         cmd_summary(st)
     elif c == "listings":
