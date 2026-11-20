@@ -307,6 +307,8 @@ body.sheet-open{overflow:hidden}
   .fp-foot{display:flex;position:sticky;bottom:0;background:var(--surface);gap:8px;justify-content:space-between;align-items:center;padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
   .fgroup:first-of-type{padding-top:0}
   #fopen{display:inline-flex}
+  /* iPhone Safari zooms into any field set under 16px when it's tapped */
+  .range input,.fgroup .zip,.fgroup select,.paste textarea,label.f input,label.f textarea,label.f select,.fbar input,.fbar select{font-size:16px}
 }
 @media (max-width:640px){
   .kicker{display:none}
@@ -513,9 +515,9 @@ body.sheet-open{overflow:hidden}
           </select>
           <span class="hint">Use "each listing" when a search mixes many models, like skis</span>
         </label>
-        <label class="f">Deal threshold (% under)<input id="e_dealPct" type="number" min="0" max="90" step="1" value="15"></label>
-        <label class="f">Price ceiling ($)<span class="hint">Hard max. Blank for none</span><input id="e_maxPrice" type="number" min="0" step="10"></label>
-        <label class="f">Market price ($)<span class="hint">Optional override for median pricing</span><input id="e_marketPrice" type="number" min="0" step="10"></label>
+        <label class="f">Deal threshold (% under)<input id="e_dealPct" type="number" min="0" max="90" step="any" value="15"></label>
+        <label class="f">Price ceiling ($)<span class="hint">Hard max. Blank for none</span><input id="e_maxPrice" type="number" min="0" step="any"></label>
+        <label class="f">Market price ($)<span class="hint">Optional override for median pricing</span><input id="e_marketPrice" type="number" min="0" step="any"></label>
         <label class="f">Rebuilt or salvage titles<select id="e_branded"><option value="false">Never count as deals</option><option value="true">Count as deals</option></select></label>
       </div>
     </fieldset>
@@ -524,14 +526,14 @@ body.sheet-open{overflow:hidden}
       <div class="grid2">
         <label class="f">Min year<input id="e_minYear" type="number" min="1900" max="2100"></label>
         <label class="f">Max year<input id="e_maxYear" type="number" min="1900" max="2100"></label>
-        <label class="f">Max miles<input id="e_maxMiles" type="number" min="0" step="500"></label>
+        <label class="f">Max miles<input id="e_maxMiles" type="number" min="0" step="any"></label>
       </div>
     </fieldset>
     <fieldset>
       <legend>Where</legend>
       <div class="grid2">
         <label class="f">Home ZIP<span class="hint">Distance is measured from here</span><input id="e_zip" inputmode="numeric" maxlength="5"></label>
-        <label class="f">Near-you radius (miles)<input id="e_radius" type="number" min="0" step="25"></label>
+        <label class="f">Near-you radius (miles)<input id="e_radius" type="number" min="0" step="any"></label>
         <label class="f">Local areas<span class="hint">Craigslist areas, comma separated</span><input id="e_areas" placeholder="denver, boulder, cosprings"></label>
       </div>
       <label class="cbx" style="margin-top:12px"><input type="checkbox" id="e_shipOutside"><span>Outside the radius, keep only listings that ship, judged on price plus shipping</span></label>
@@ -594,7 +596,7 @@ const RULES = {
 };
 let RULES_DOC = null;
 const TABS = ["listings","sites","checks","how"];
-const PAGE_VERSION = "2.2";
+const PAGE_VERSION = "2.3";
 let ARCH = null, archState = "loading";
 const EMPTY = document.getElementById("empty").outerHTML;
 const $ = id => document.getElementById(id);
@@ -626,7 +628,7 @@ function branded(l){ if(l.titleStatus) return !/^clean$/i.test(l.titleStatus); r
 function marketFor(s){
   if(s.pricing==="per-item") return {value:null, perItem:true, basis:"each listing against its own model's fair used price"};
   const set=num(s.marketPrice); if(set) return {value:set, basis:"set by you"};
-  const prices=listings.filter(l=>l.searchId===s.id && l.status!=="passed" && !l.gone && !branded(l) && l.check?.status!=="failed" && num(l.price)).map(l=>Number(l.price));
+  const prices=listings.filter(l=>l.searchId===s.id && l.status!=="passed" && !l.gone && !l.pastedOnly && !branded(l) && l.check?.status!=="failed" && num(l.price)).map(l=>Number(l.price));
   const m=median(prices);
   return m ? {value:m, basis:`median of ${prices.length} listing${prices.length===1?"":"s"}`} : {value:null, basis:"no listings yet"};
 }
@@ -641,9 +643,12 @@ function coordsFor(l){
   const zm=String(l.zip||"").match(/\d{5}/)||String(l.location||"").match(/\b(\d{5})\b/);
   if(zm){ const c=GEO.z[zm[1]||zm[0]]; if(c) return c; }
   const cm=String(l.location||"").match(/^\s*([^,]+?),\s*([A-Za-z]{2})\b/);
-  if(cm){ const c=GEO.c[cm[1].trim().toLowerCase().replace(/\s+/g," ")+"|"+cm[2].toUpperCase()]; if(c) return c; }
+  if(cm){ const city=cm[1].trim().toLowerCase().replace(/\s+/g," "), st="|"+cm[2].toUpperCase();
+    const c=GEO.c[city+st] || GEO.c[city.replace(/\./g,"")+st] || GEO.c[cityAlias(city)+st]; if(c) return c; }
   return null;
 }
+// "St. Paul" and "Saint Paul" are the same town; geo.json has most in the long form and a few as "st james" (same as ds.py city_coords).
+function cityAlias(city){ return city.replace(/^st\.?\s+/,"saint ").replace(/^ste\.?\s+/,"sainte ").replace(/^ft\.?\s+/,"fort ").replace(/^mt\.?\s+/,"mount "); }
 function milesBetween(a,b){ if(!a||!b) return null; const R=3958.8, rad=x=>x*Math.PI/180; const dLa=rad(b[0]-a[0]), dLo=rad(b[1]-a[1]); const h=Math.sin(dLa/2)**2+Math.cos(rad(a[0]))*Math.cos(rad(b[0]))*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
 
 function score(l, s){
@@ -670,8 +675,9 @@ function score(l, s){
   const checkFailed = chk.status==="failed";
   const confirmedAt = [l.lastChecked, l.lastSeen, chk.at].filter(Boolean).sort().pop();
   const fresh = hoursSince(confirmedAt) <= RULES.priceFreshHours;
-  const isDeal = underMarket && underCeiling && reachable && verified && !brandedTitle && checkPassed && fresh;
-  const lead = underMarket && underCeiling && reachable && !brandedTitle && !isDeal && !checkFailed;
+  const live = !l.gone;
+  const isDeal = live && underMarket && underCeiling && reachable && verified && !brandedTitle && checkPassed && fresh;
+  const lead = live && underMarket && underCeiling && reachable && !brandedTitle && !isDeal && !checkFailed;
   // What a lead waits on (v2.1, same as ds.py score()): a caution verdict is settled until the price changes
   // after it or it is older than recheckCheckDays; a passed check with an old price only needs a re-open.
   const chkAt = chk.at || "";
@@ -686,14 +692,18 @@ const ROUTE_NAME = {pc:"Your PC", cloud:"Cloud", legacy:"Collector"};
 const ROUTE_STATE = {ok:"read OK", partial:"partly read", auth:"needs sign-in", blocked:"blocked", error:"failed", setup:"needs setup"};
 const LEGACY = {ok:"ok", degraded:"partial", stale:"error", blocked:"blocked", setup:"setup", paused:"error"};
 const LEVEL = {ok:["Connected","s-ok"], partial:["Partly connected","s-warn"], down:["Not connected","s-bad"], never:["Not checked yet","s-idle"]};
-function routesOf(d){
+// A route can say which searches its read covered (route.searches, v2.3). Without it, it covers every search.
+// Given a search id, only the routes that covered that search count, so the PC reading Craigslist for the
+// Daytona can't show Craigslist as connected for skis.
+function covers(r, sid){ return !sid || !Array.isArray(r.searches) || r.searches.includes(sid); }
+function routesOf(d, sid){
   const out=[];
   ["pc","cloud"].forEach(k=>{ const r=d[k]; if(r && typeof r==="object" && r.state) out.push({key:k,...r}); });
   if(!out.length && d.state && LEGACY[d.state]) out.push({key:"legacy", state:LEGACY[d.state], at:d.lastCheck, lastOk:d.lastOk, note:d.note, count:d.lastCount});
-  return out.filter(r=>r.state!=="off");
+  return out.filter(r=>r.state!=="off" && covers(r, sid));
 }
-function siteStatus(id){
-  const d=health.find(h=>h.id===id)||{id}; const routes=routesOf(d);
+function siteStatus(id, sid){
+  const d=health.find(h=>h.id===id)||{id}; const routes=routesOf(d, sid);
   const fresh=routes.filter(r=>hoursSince(r.at)<=RULES.connectedHours);
   let level="down", reason=null, route=null;
   if((route=fresh.find(r=>r.state==="ok"))) level="ok";
@@ -744,8 +754,10 @@ function shortRun(note){ const t=String(note||"").replace(/^rules v[\d.]+:\s*/,"
 function renderConnBar(){
   const bar=$("connBar");
   if(!healthLoaded || tab!=="listings"){ bar.hidden=true; return; }
-  const ids=[...new Set(scopeSearches().flatMap(mustFor))];
-  const must=ids.map(siteStatus);
+  // Each must-have site is judged for each search in scope; a site counts once, at its worst.
+  const worst=new Map(), rank={down:0, partial:1, ok:2};
+  scopeSearches().forEach(s=>mustFor(s).forEach(id=>{ const x=siteStatus(id, s.id), w=worst.get(id); if(!w || rank[x.level]<rank[w.level]) worst.set(id, x); }));
+  const must=[...worst.values()];
   const down=must.filter(x=>x.level==="down"), part=must.filter(x=>x.level==="partial");
   if(!down.length && !part.length){ bar.hidden=true; return; }
   const names=a=>a.map(x=>x.name).join(", ");
@@ -767,7 +779,7 @@ function renderSites(){
   else {
     const ids=s.sources||[]; const mustIds=mustFor(s);
     const order=[...mustIds, ...ids.filter(id=>!mustIds.includes(id))];
-    const st=order.map(id=>({...siteStatus(id), must:mustIds.includes(id), meta:site(id)}));
+    const st=order.map(id=>({...siteStatus(id, s.id), must:mustIds.includes(id), meta:site(id)}));
     const mustSt=st.filter(x=>x.must), okM=mustSt.filter(x=>x.level==="ok").length, downM=mustSt.filter(x=>x.level==="down").length, partM=mustSt.filter(x=>x.level==="partial");
     $("sitesEyebrow").textContent=`Sites · ${s.name}`;
     $("sitesHead").textContent = !ids.length ? `No sites picked yet for ${s.name}.`
@@ -793,8 +805,9 @@ function renderSites(){
   $("connBeat").textContent=beat.join(" · ");
   const all=allSiteIds().filter(id=>searches.some(s=>(s.sources||[]).includes(id)) || health.some(h=>h.id===id));
   $("allSites").innerHTML=`<thead><tr><th>Site</th><th>Status</th><th>Used by</th><th>Last read</th></tr></thead><tbody>${all.map(id=>{
-    const x=siteStatus(id), [label,cls]=levelOf(x), used=searches.filter(s=>(s.sources||[]).includes(id)).map(s=>s.name);
-    return `<tr><td><strong>${esc(site(id).name)}</strong><div class="note">${esc(site(id).kind||"")}</div></td><td><span class="st ${cls}">${esc(label)}</span></td><td>${esc(used.join(", ")||"no search")}</td><td class="note">${esc(x.route.at?ago(x.route.at):"never")}</td></tr>`;}).join("")}</tbody>`;
+    const x=siteStatus(id), [label,cls]=levelOf(x), users=searches.filter(s=>(s.sources||[]).includes(id)), used=users.map(s=>s.name);
+    const notFor=x.level==="ok" ? users.filter(s=>siteStatus(id, s.id).level!=="ok").map(s=>s.name) : [];
+    return `<tr><td><strong>${esc(site(id).name)}</strong><div class="note">${esc(site(id).kind||"")}</div></td><td><span class="st ${cls}">${esc(label)}</span>${notFor.length?`<div class="note">not for ${esc(notFor.join(", "))}</div>`:""}</td><td>${esc(used.join(", ")||"no search")}</td><td class="note">${esc(x.route.at?ago(x.route.at):"never")}</td></tr>`;}).join("")}</tbody>`;
 }
 
 /* ---------- shared rules (meta/rules) ---------- */
@@ -826,13 +839,14 @@ function renderChecks(){
   $("segChecks").innerHTML=segHtml(); wireSeg($("segChecks"));
   if(!s){ $("verifyCols").innerHTML=""; return; }
   const ls=listings.filter(l=>l.searchId===s.id && !l.gone);
-  const c={passed:0,caution:0,failed:0,pending:0,unverified:0};
-  ls.forEach(l=>{ if(l.verified===false) c.unverified++; const k=l.check?.status; if(k&&c[k]!=null) c[k]++; else if(l.verified!==false) c.pending++; });
+  // One bucket per listing, so the rows add up to the total: a check's verdict first, then whether the ad was opened.
+  const c={passed:0,caution:0,failed:0,pending:0,nocheck:0,unverified:0};
+  ls.forEach(l=>{ const k=l.check?.status; if(k && c[k]!=null && k!=="nocheck" && k!=="unverified") c[k]++; else if(l.verified===false) c.unverified++; else c.nocheck++; });
   $("verifyCols").innerHTML=`
     <div class="col"><p>${s.verifyNotes?esc(s.verifyNotes):`<span class="muted">The collector writes this checklist on the search's first run: what the real item has, what it gets confused with, its serial or VIN format, and what to ask the seller.</span>`}</p></div>
     <div class="col"><dl class="terms">
       <dt>Passed</dt><dd class="num">${c.passed}</dd><dt>Caution</dt><dd class="num">${c.caution}</dd><dt>Failed</dt><dd class="num">${c.failed}</dd>
-      <dt>Pending</dt><dd class="num">${c.pending}</dd><dt>Not opened yet</dt><dd class="num">${c.unverified}</dd></dl>
+      <dt>Check pending</dt><dd class="num">${c.pending}</dd><dt>No check yet</dt><dd class="num">${c.nocheck}</dd><dt>Ad not opened yet</dt><dd class="num">${c.unverified}</dd></dl>
       <p class="note">Listings for ${esc(s.name)} that aren't gone, by where they stand in the checks.</p></div>`;
 }
 
@@ -910,12 +924,14 @@ function scopeRows(){
     return {l, s, sc, d, ds:dstate(sc), st:stOf(l), bid:isBid(l), drop:dropOf(l)};
   });
 }
+// A range typed backwards ("2015 to 2009") is read the right way round.
+function ordered(a,b){ return (a!=null && b!=null && a>b) ? [b,a] : [a,b]; }
 function passes(r, skip){
   const l=r.l, p=num(l.price);
   if(skip!=="q" && F.q && !`${l.title} ${l.location} ${l.seller} ${l.year||""}`.toLowerCase().includes(F.q.toLowerCase())) return false;
   if(skip!=="deal" && F.deal.length && !F.deal.includes(r.ds)) return false;
-  if(skip!=="price" && (F.pmin!=null || F.pmax!=null)){ if(p==null || (F.pmin!=null && p<F.pmin) || (F.pmax!=null && p>F.pmax)) return false; }
-  if(skip!=="year" && fieldOn.year && (F.ymin!=null || F.ymax!=null)){ const y=num(l.year); if(y==null || (F.ymin!=null && y<F.ymin) || (F.ymax!=null && y>F.ymax)) return false; }
+  if(skip!=="price" && (F.pmin!=null || F.pmax!=null)){ const [lo,hi]=ordered(F.pmin,F.pmax); if(p==null || (lo!=null && p<lo) || (hi!=null && p>hi)) return false; }
+  if(skip!=="year" && fieldOn.year && (F.ymin!=null || F.ymax!=null)){ const [lo,hi]=ordered(F.ymin,F.ymax), y=num(l.year); if(y==null || (lo!=null && y<lo) || (hi!=null && y>hi)) return false; }
   if(skip!=="miles" && fieldOn.miles && F.mmax!=null){ const m=num(l.miles); if(m==null || m>F.mmax) return false; }
   // Unknown locations stay in the list under a distance filter, the same as before v2.2.
   if(skip!=="dist" && F.dist!=="any"){ if(F.dist==="near"){ if(r.sc.homeDist!=null && !r.sc.inRadius) return false; } else if(r.d!=null && r.d>Number(F.dist)) return false; }
@@ -984,15 +1000,17 @@ function updateCounts(rows){
 /* --- applied filters as removable chips; the count says what the list shows --- */
 function chipList(){
   const c=[], d=defaultF(), fm=n=>"$"+Math.round(n).toLocaleString("en-US");
-  if(F.q) c.push([`"${F.q}"`, ()=>{ F.q=""; $("q").value=""; }]);
-  if(F.deal.length) c.push([F.deal.map(v=>DLABEL[v]).join(", "), ()=>{ F.deal=[]; }]);
-  if(F.pmin!=null || F.pmax!=null) c.push([F.pmin!=null&&F.pmax!=null?`${fm(F.pmin)} to ${fm(F.pmax)}`:F.pmin!=null?`${fm(F.pmin)} and up`:`Up to ${fm(F.pmax)}`, ()=>{ F.pmin=F.pmax=null; }]);
-  if(fieldOn.year && (F.ymin!=null || F.ymax!=null)) c.push([F.ymin!=null&&F.ymax!=null?(F.ymin===F.ymax?`${F.ymin}`:`${F.ymin} to ${F.ymax}`):F.ymin!=null?`${F.ymin} or newer`:`${F.ymax} or older`, ()=>{ F.ymin=F.ymax=null; }]);
-  if(fieldOn.miles && F.mmax!=null) c.push([`Up to ${Math.round(F.mmax).toLocaleString("en-US")} mi`, ()=>{ F.mmax=null; }]);
-  if(F.dist!=="any") c.push([F.dist==="near"?"Near you":`Within ${Number(F.dist).toLocaleString("en-US")} mi of ${effZip()}`, ()=>{ F.dist="any"; }]);
-  if(F.site.length) c.push([F.site.length<=2?F.site.map(id=>site(id).name).join(", "):`${F.site.length} sites`, ()=>{ F.site=[]; }]);
-  if(F.status.join(",")!==d.status.join(",")) c.push([F.status.length?F.status.map(v=>SLABEL[v]).join(", "):"Any status", ()=>{ F.status=[...OPEN_ST]; }]);
-  if(F.drop) c.push(["Price dropped", ()=>{ F.drop=false; }]);
+  // Each chip is [label, remove, key]; the key says which filter it is, whatever the label reads.
+  const [pl,ph]=ordered(F.pmin,F.pmax), [yl,yh]=ordered(F.ymin,F.ymax);
+  if(F.q) c.push([`"${F.q}"`, ()=>{ F.q=""; $("q").value=""; }, "q"]);
+  if(F.deal.length) c.push([F.deal.map(v=>DLABEL[v]).join(", "), ()=>{ F.deal=[]; }, "deal"]);
+  if(pl!=null || ph!=null) c.push([pl!=null&&ph!=null?`${fm(pl)} to ${fm(ph)}`:pl!=null?`${fm(pl)} and up`:`Up to ${fm(ph)}`, ()=>{ F.pmin=F.pmax=null; }, "price"]);
+  if(fieldOn.year && (yl!=null || yh!=null)) c.push([yl!=null&&yh!=null?(yl===yh?`${yl}`:`${yl} to ${yh}`):yl!=null?`${yl} or newer`:`${yh} or older`, ()=>{ F.ymin=F.ymax=null; }, "year"]);
+  if(fieldOn.miles && F.mmax!=null) c.push([`Up to ${Math.round(F.mmax).toLocaleString("en-US")} mi`, ()=>{ F.mmax=null; }, "miles"]);
+  if(F.dist!=="any") c.push([F.dist==="near"?"Near you":`Within ${Number(F.dist).toLocaleString("en-US")} mi of ${effZip()}`, ()=>{ F.dist="any"; }, "dist"]);
+  if(F.site.length) c.push([F.site.length<=2?F.site.map(id=>site(id).name).join(", "):`${F.site.length} sites`, ()=>{ F.site=[]; }, "site"]);
+  if(F.status.join(",")!==d.status.join(",")) c.push([F.status.length?F.status.map(v=>SLABEL[v]).join(", "):"Any status", ()=>{ F.status=[...OPEN_ST]; }, "status"]);
+  if(F.drop) c.push(["Price dropped", ()=>{ F.drop=false; }, "drop"]);
   return c;
 }
 let CHIPS=[];
@@ -1024,7 +1042,7 @@ function renderStrip(rows){
   const pool=rows.filter(r=>!r.l.gone && passes(r,"deal"));
   const deals=pool.filter(r=>r.ds==="deal").sort((a,b)=>pctOf(b)-pctOf(a));
   const checking=pool.filter(r=>r.ds==="checking").length;
-  const filtered=CHIPS.some(([label])=>!/^(Checked deal|Being checked)/.test(label));
+  const filtered=CHIPS.some(c=>c[2]!=="deal");
   el.hidden=false;
   if(!deals.length){
     el.innerHTML=`<p class="note">No checked deals ${filtered?"match these filters":"right now"}.${checking?` ${checking} cheap listing${checking===1?" is":"s are"} being checked. <button type="button" class="linkbtn" id="showChecking">Show ${checking===1?"it":"them"}</button>`:""}</p>`;
@@ -1090,7 +1108,7 @@ function renderSummary(s){
   if(!s || isAll() || openPanel!=="details"){ el.hidden=true; return; }
   const m=MK.get(s.id)||marketFor(s), thr=num(s.dealPct)??RULES.dealPctDefault, run=lastRunFor(s.id);
   const yrs=(s.minYear||s.maxYear)?`${s.minYear||"any"} to ${s.maxYear||"any"}`:"any";
-  const rule = s.pricing==="per-item" ? `${thr}% under each model's fair used price` : `${thr}% under ${money(m.value)} (${esc(m.basis)}), so ${m.value?money(m.value*(1-thr/100))+" or less":"once listings come in"}`;
+  const rule = s.pricing==="per-item" ? `${thr}% under each model's fair used price` : m.value ? `${thr}% under ${money(m.value)} (${esc(m.basis)}), so ${money(m.value*(1-thr/100))} or less` : `${thr}% under the median, once listings come in`;
   el.hidden=false;
   el.innerHTML=`<div class="block-head"><div><span class="section-label">${esc(s.category||"Search")}${s.active===false?" · paused":""}</span><h2 class="block-title">${esc(s.name)}</h2></div>${canWrite?`<button class="btn" id="editSearch" type="button">Edit search</button>`:""}</div>
     <div class="cols">
@@ -1105,7 +1123,7 @@ function renderSubline(){
   if(isAll()){ el.innerHTML=""; el.hidden=true; return; }
   el.hidden=false;
   const m=MK.get(s.id)||marketFor(s), thr=num(s.dealPct)??RULES.dealPctDefault, run=lastRunFor(s.id);
-  const one=`${s.pricing==="per-item"?`${thr}% under fair used`:`${thr}% under ${money(m.value)}`}${s.maxPrice?` · under ${money(s.maxPrice)}`:""}${s.zip?` · near you within ${esc(s.radiusMi??"any")} mi`:""}${run?` · last run ${esc(ago(run.at))}`:""}`;
+  const one=`${s.pricing==="per-item"?`${thr}% under fair used`:m.value?`${thr}% under ${money(m.value)}`:`${thr}% under the median, once listings come in`}${s.maxPrice?` · under ${money(s.maxPrice)}`:""}${s.zip?` · near you within ${esc(s.radiusMi??"any")} mi`:""}${run?` · last run ${esc(ago(run.at))}`:""}`;
   el.innerHTML=`<span>${one}</span><button type="button" class="linkbtn" data-panel="details" aria-expanded="${openPanel==="details"}" aria-controls="summary">Search details</button>${canWrite?`<button type="button" class="linkbtn" data-panel="paste" aria-expanded="${openPanel==="paste"}" aria-controls="paste">Add listings by hand</button>`:""}`;
 }
 function renderListings(){
@@ -1143,6 +1161,8 @@ function setSheet(open){
   $("fopen").setAttribute("aria-expanded",String(open));
   if(open){ const f=p.querySelector("input,select,button"); if(f) setTimeout(()=>f.focus({preventScroll:true}),50); } else if(matchMedia("(max-width:900px)").matches) $("fopen").focus({preventScroll:true});
 }
+// Widening the window past 900 px turns the sheet back into the side panel, so close it and lift the scrim.
+try{ matchMedia("(max-width:900px)").addEventListener("change", e=>{ if(!e.matches) setSheet(false); }); }catch(e){}
 function changed(){ saveF(); renderResults(); }
 let typeTimer=null;
 function typed(){ clearTimeout(typeTimer); typeTimer=setTimeout(changed,250); }
@@ -1442,7 +1462,7 @@ function parseQuick(text){
   t=t.replace(/\$\s*([\d.,]+)\s*(k)?\s*(?:or less|max|tops|ceiling)?/i,(m,n,k)=>{ if(out.maxPrice==null) out.maxPrice=Math.round(Number(n.replace(/,/g,""))*(k?1000:1)); return " "; });
   t=t.replace(/\b((?:19|20)\d{2})\s*(?:-|to|–)\s*((?:19|20)\d{2})\b/,(m,a,b)=>{ out.minYear=Number(a); out.maxYear=Number(b); return " "; });
   t=t.replace(/\b((?:19|20)\d{2})\s*\+|\b((?:19|20)\d{2})\s+or newer\b/i,(m,a,b)=>{ out.minYear=Number(a||b); return " "; });
-  t=t.replace(/\b(?:no|not|without|exclude|excluding)\s+([a-z][a-z0-9 ]{1,30}?)(?=,|;| and | or |$)/gi,(m,w)=>{ out.exclude.push(w.trim()); return " "; });
+  t=t.replace(/(?:\b(?:and|or|but)\s+)?\b(?:no|not|without|exclude|excluding)\s+([a-z][a-z0-9 ]{1,30}?)(?=,|;| and | or |$)/gi,(m,w)=>{ out.exclude.push(w.trim()); return " "; });
   out.keywords=t.replace(/[,;]+/g," ").replace(/\s+/g," ").trim();
   return out;
 }
@@ -1557,7 +1577,8 @@ $("e_delete").onclick=async()=>{
   const timer=setTimeout(()=>{ $("status").textContent="Still waiting for your data. It may be out of date."; },10000);
   const done=()=>{ if(got.s&&got.l){ clearTimeout(timer); refreshMarkets(); let deals=0; searches.forEach(s=>{ deals+=openOf(s).filter(l=>score(l,s).isDeal).length; });
     $("status").textContent=`${searches.length} search${searches.length===1?"":"es"} · ${listings.length} listing${listings.length===1?"":"s"} · ${deals} deal${deals===1?"":"s"}`; } };
-  const fail=e=>{ clearTimeout(timer); $("status").textContent=e?.code==="revoked"?"Access to this page's data ended.":"Couldn't load your data. Reload the page to try again."; };
+  // Once data has loaded, a failed 60-second refresh keeps what's on screen; the next good refresh clears this line.
+  const fail=e=>{ clearTimeout(timer); $("status").textContent=e?.code==="revoked"?"Access to this page's data ended.":(got.s&&got.l)?"Couldn't refresh just now. Showing what loaded; it tries again in a minute.":"Couldn't load your data. Reload the page to try again."; };
   db.collection("meta").onSnapshot(snap=>{ const d=snap.docs.find(x=>x.id==="rules"); applyRulesDoc(d?d.data():null); const a=snap.docs.find(x=>x.id==="architecture"); try{ setArch(a?a.data():null); }catch(e){ ARCH=null; archState="missing"; } refreshMarkets(); render(); }, ()=>{ ARCH=null; archState="missing"; if(tab==="how") render(); });
   db.collection("searches").onSnapshot(snap=>{ searches=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||""))); if(!snap.metadata.fromCache){ got.s=true; searchesLoaded=true; } done(); render(); }, fail);
   db.collection("listings").onSnapshot(snap=>{ listings=snap.docs.map(d=>({id:d.id,...d.data()})); if(!snap.metadata.fromCache) got.l=true; done(); render(); }, fail);

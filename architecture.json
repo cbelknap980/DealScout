@@ -1,8 +1,8 @@
 {
  "title": "Two collectors and the page share one private data repo and one rules record",
- "version": "2.2",
- "builtFrom": "index.html + js/github-db.js, collectors/cloud.md and pc.md, tools/ds.py and rules.json v1.3, as of Nov 19",
- "updatedAt": "2026-11-19",
+ "version": "2.3",
+ "builtFrom": "index.html + js/github-db.js, collectors/cloud.md and pc.md, tools/ds.py and rules.json v1.4, as of Nov 20",
+ "updatedAt": "2026-11-20",
  "columns": [
   {
    "id": "inputs",
@@ -69,7 +69,8 @@
    "reads": [],
    "writes": [],
    "rules": [
-    "A blocked site pauses with backoff (24 h doubling, up to 7 days)",
+    "A blocked site pauses: 24 h after one block, doubling with each block in a row, up to 7 days; ds.py sets the pause",
+    "Each site's pages are opened one at a time, never several at once",
     "A site that only renders in a real browser moves to the PC (how: pc in sites.json)"
    ],
    "keywords": [
@@ -253,7 +254,7 @@
    "kind": "service",
    "name": "ds.py data helper",
    "summary": "How collectors read and change the data",
-   "does": "A small Python script the collectors run for every read and write: summaries, scoring (the same logic as the page), the work queues (which listings to re-open this run and which need a photo check, in order), storing listings, checks, routes and runs. It records each change, and on push it replays them on the newest copy if the other collector pushed first, so nothing gets overwritten.",
+   "does": "A small Python script the collectors run for every read and write: summaries, scoring (the same logic as the page), the work queues (which listings to re-open this run and which need a photo check, in order), storing listings, checks, routes and runs. It records each change, and on push it replays them on the newest copy if the other collector pushed first, so nothing gets overwritten; a change that no longer applies is skipped and reported, and a replay cut off partway is redone on the next push. It also sets a blocked site's pause from the rules record.",
    "code": "tools/ds.py",
    "reads": [
     "dealscout-data (all files)"
@@ -263,7 +264,8 @@
    ],
    "rules": [
     "Collectors never hand-edit JSON or force-push",
-    "Each collector may write only its own route on a site"
+    "Each collector may write only its own route on a site",
+    "A route can name the searches its read covered; the page judges a site per search"
    ],
    "keywords": [
     "ds.py",
@@ -340,7 +342,7 @@
    "kind": "page",
    "name": "Deal Scout page",
    "summary": "GitHub Pages site, your token per device",
-   "does": "The page at cbelknap980.github.io/DealScout. It reads the data repo with Cameron's GitHub token, re-checks every minute while open, and re-scores every listing in the browser with the rules record. It opens on Listings: checked deals as photo cards on top, then every listing with filters for deal state, price, year, miles, distance, site, status and price drops, plus Watch, Contacted and Pass on each row. Sites, Checks and this diagram are the other tabs.",
+   "does": "The page at cbelknap980.github.io/DealScout. It reads the data repo with Cameron's GitHub token, re-checks every minute while open, and re-scores every listing in the browser with the rules record. It opens on Listings: checked deals as photo cards on top, then every listing with filters for deal state, price, year, miles, distance, site, status and price drops, plus Watch, Contacted and Pass on each row. Sites, Checks and this diagram are the other tabs; Sites judges each site per search, from the routes that covered that search.",
    "code": "index.html (score(), siteStatus(), renderListings(), passes(), renderResults(), renderSites(), renderChecks()); js/github-db.js (data layer)",
    "live": {
     "type": "page"
