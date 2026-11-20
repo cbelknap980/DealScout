@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 /* Layout: Cameron's "Beamline" look, light only. A paper page, a hairline masthead with pill tabs, then one column per tab:
-   italic eyebrow, serif headline, a short lead, then cards. Tabs: Brief, Listings, Sites, Checks, How it works. */
+   italic eyebrow, serif headline, a short lead, then cards. Tabs: Listings (home), Sites, Checks, How it works. */
 :root{
   --bg:#f3efe6; --surface:#fbf9f4; --sunk:#eee9de; --line:#e0d9cc;
   --fg:#222c37; --head:#14263d; --muted:#5d6670;
@@ -152,7 +152,7 @@ table.sites td{padding:10px;border-bottom:1px solid var(--line);vertical-align:t
 .row .title a{color:var(--head);text-decoration:none;border-bottom:1px solid var(--line)}
 .row .title a:hover{border-color:var(--accent)}
 .row select{grid-row:span 2;align-self:center}
-.meta{min-width:0;font-size:14px;color:var(--muted);display:flex;flex-wrap:wrap;gap:2px 12px}
+.meta{min-width:0;font-size:14px;color:var(--muted);display:flex;flex-wrap:wrap;gap:2px 12px;overflow-wrap:anywhere}
 .meta .lnote{flex-basis:100%;color:var(--warn)}
 .meta .cnote{flex-basis:100%}
 .meta .cnote.bad{color:var(--bad)}
@@ -236,6 +236,102 @@ legend{font-family:var(--display);font-size:16px;padding:0 4px;color:var(--head)
 .hw-panel mark{background:var(--warn-soft);color:inherit;border-radius:3px;padding:0 1px}
 .hw-live-dd{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline}
 
+/* listings home (v2.2): compact head, checked-deal strip, filter rail (a bottom sheet on phones), sticky search bar,
+   applied-filter chips, one-tap Watch / Contacted / Pass on each row */
+#p-listings{gap:14px}
+.lhead{display:grid;gap:12px}
+#p-listings .headline{font-size:clamp(24px,3vw,32px)}
+.segrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.newbtn{border:1px dashed var(--line);background:none;border-radius:999px;padding:8px 14px;font-weight:600;font-size:14.5px;color:var(--muted);cursor:pointer}
+.newbtn:hover,.newbtn[aria-expanded="true"]{border-color:var(--ink);color:var(--head)}
+.subline{display:flex;flex-wrap:wrap;gap:2px 14px;align-items:baseline;font-size:14.5px;color:var(--muted)}
+.linkbtn{border:0;background:none;padding:2px 0;font:inherit;font-weight:600;color:var(--head);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px;cursor:pointer}
+.linkbtn:hover,.linkbtn[aria-expanded="true"]{text-decoration-color:var(--accent)}
+#p-listings .connbar{padding:9px 14px;font-size:14.5px;display:block}
+#p-listings .connbar b{font-weight:700}
+#p-listings .connbar .go{font-weight:600;text-decoration:underline;text-underline-offset:3px;white-space:nowrap}
+.paste textarea{background:var(--bg)}
+.strip{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;min-width:0}
+.strip-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 14px}
+.strip-cards{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(210px,240px);gap:12px;overflow-x:auto;scroll-snap-type:x proximity;padding-bottom:6px;scrollbar-width:thin}
+.dcard{scroll-snap-align:start;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;display:grid;align-content:start;text-decoration:none;color:inherit;min-width:0}
+.dcard:hover{border-color:var(--accent)}
+.dcard img{width:100%;height:120px;object-fit:cover;display:block;background:var(--sunk)}
+.dcard .dbody{padding:12px 14px 14px;display:grid;gap:6px}
+.dcard .dtop{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.dcard .amt{font-family:var(--mono);font-size:18px;color:var(--head)}
+.dcard h3{font-size:16px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.dcard .note{font-size:13px;line-height:1.45}
+.lgrid{display:grid;grid-template-columns:240px minmax(0,1fr);gap:26px;align-items:start}
+.fpanel{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;display:grid;align-content:start;padding-right:4px}
+.fp-head,.fp-foot{display:none}
+.fgroup{border-top:1px solid var(--line);padding:12px 0 14px;display:grid;gap:7px}
+.fgroup:first-of-type{border-top:0;padding-top:4px}
+.fgroup h3{font-family:var(--body);font-size:14px;font-weight:700;color:var(--head)}
+.fgroup .note{font-size:12.5px}
+.opt{display:flex;align-items:center;gap:8px;font-size:14.5px;cursor:pointer;line-height:1.35}
+.opt input{margin:0;flex:none}
+.opt .c{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.opt.zero{opacity:.5}
+.range{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;align-items:center;font-size:14px;color:var(--muted)}
+.range input,.fgroup select{width:100%;min-width:0}
+.fgroup .zipl{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--muted)}
+.fgroup .zip{width:6.2em}
+.fgroup .zip[aria-invalid="true"]{border-color:var(--bad)}
+.lmain{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;min-width:0}
+.fbar{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;gap:8px;align-items:center;padding:8px 0;margin-top:-8px}
+.fbar input[type=search]{flex:1 1 auto;min-width:0}
+.fbar select{flex:none;max-width:11.5em}
+#fopen{display:none;flex:none}
+.chips{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;font-size:14px;color:var(--muted);min-height:24px}
+.chip{display:inline-flex;gap:7px;align-items:center;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 11px;font-size:13.5px;font-weight:600;color:var(--head);cursor:pointer;max-width:100%}
+.chip:hover{border-color:var(--ink)}
+.chip::after{content:"\2715";font-size:10.5px;color:var(--muted)}
+.acts{display:flex;gap:6px;flex-wrap:wrap;grid-row:span 2;align-self:center;justify-content:flex-end}
+.act{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 11px;font-size:13px;font-weight:600;color:var(--head);cursor:pointer;white-space:nowrap}
+.act:hover{border-color:var(--ink)}
+.act[aria-pressed="true"]{background:var(--ink);color:var(--ink-fg);border-color:var(--ink)}
+.act.pass[aria-pressed="true"]{background:var(--sunk);color:var(--muted);border-color:var(--line)}
+.act:disabled{opacity:.5;cursor:default}
+.scrim{position:fixed;inset:0;background:color-mix(in srgb,var(--fg) 40%,transparent);z-index:24}
+body.sheet-open{overflow:hidden}
+#list .row{align-items:start}
+#list .row .price{align-content:start;padding-top:2px}
+#list .row .acts{align-self:start}
+@media (max-width:900px){
+  .lgrid{grid-template-columns:minmax(0,1fr)}
+  .fpanel{position:fixed;left:0;right:0;bottom:0;top:auto;max-height:86vh;background:var(--surface);border-radius:16px 16px 0 0;box-shadow:0 -8px 30px rgba(20,38,61,.18);z-index:25;padding:0 18px;transform:translateY(105%);visibility:hidden;transition:transform .2s,visibility .2s}
+  .fpanel.open{transform:none;visibility:visible}
+  .fp-head{display:flex;position:sticky;top:0;background:var(--surface);justify-content:space-between;align-items:center;padding:14px 0 10px;z-index:1;font-family:var(--display);font-size:20px;color:var(--head)}
+  .fp-head .btn{font-family:var(--body);font-size:14.5px}
+  .fp-foot{display:flex;position:sticky;bottom:0;background:var(--surface);gap:8px;justify-content:space-between;align-items:center;padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
+  .fgroup:first-of-type{padding-top:0}
+  #fopen{display:inline-flex}
+}
+@media (max-width:640px){
+  .kicker{display:none}
+  #p-listings{gap:12px}
+  #p-listings .headline{font-size:22px;line-height:1.25}
+  #p-listings .connbar{font-size:13.5px;padding:8px 12px}
+  .lhead{gap:10px}
+  .segrow{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-inline:-16px;padding-inline:16px}
+  .segrow::-webkit-scrollbar{display:none}
+  .segrow .seg{flex-wrap:nowrap}
+  .segrow .seg button,.newbtn{white-space:nowrap;flex:none;padding:7px 13px;font-size:14px}
+  .subline{font-size:13.5px}
+  .strip-head .note{display:none}
+  .strip-cards{grid-auto-columns:minmax(270px,82vw);margin-inline:-16px;padding-inline:16px;scroll-padding-inline:16px}
+  .dcard{grid-template-columns:88px minmax(0,1fr)}
+  .dcard img{height:100%;min-height:104px}
+  .dcard .dbody{padding:10px 12px;gap:4px;grid-column:2}
+  .dcard.noimg{grid-template-columns:minmax(0,1fr)}
+  .dcard.noimg .dbody{grid-column:1}
+  .dcard h3{font-size:15px}
+  .dcard .note{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+  .dcard .note + .note{display:none}
+  .fbar select{max-width:7.6em}
+}
+
 @media (max-width:640px){
   .mast .wrap{padding-block:12px 0}
   .mast-note{display:none}
@@ -253,7 +349,7 @@ legend{font-family:var(--display);font-size:16px;padding:0 4px;color:var(--head)
   .filters select{width:100%;min-width:0}
   .row{grid-template-columns:minmax(0,1fr) auto}
   .row .price{grid-row:auto;grid-column:1/-1;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  .row select{grid-row:auto;grid-column:2;grid-row-start:2}
+  .row .acts{grid-row:auto;grid-column:1/-1;order:5;justify-content:flex-start}
   .row .title{grid-column:1/2}
   .meta{grid-column:1/-1}
   dl.terms{grid-template-columns:minmax(0,1fr)}
@@ -274,8 +370,7 @@ legend{font-family:var(--display);font-size:16px;padding:0 4px;color:var(--head)
     </div>
     <div class="navrow">
       <nav class="tabs" role="tablist" aria-label="Sections">
-        <button class="tab" role="tab" id="tab-brief" data-tab="brief" aria-selected="true">Brief</button>
-        <button class="tab" role="tab" id="tab-listings" data-tab="listings" aria-selected="false">Listings</button>
+                <button class="tab" role="tab" id="tab-listings" data-tab="listings" aria-selected="true">Listings</button>
         <button class="tab" role="tab" id="tab-sites" data-tab="sites" aria-selected="false">Sites</button>
         <button class="tab" role="tab" id="tab-checks" data-tab="checks" aria-selected="false">Checks</button>
         <button class="tab" role="tab" id="tab-how" data-tab="how" aria-selected="false">How it works</button>
@@ -288,23 +383,18 @@ legend{font-family:var(--display);font-size:16px;padding:0 4px;color:var(--head)
 <main>
   <div class="wrap">
 
-    <!-- BRIEF -->
-    <section class="panel" id="p-brief" role="tabpanel" aria-labelledby="tab-brief">
-      <div class="intro">
-        <div class="eyebrow" id="briefEyebrow">Brief</div>
-        <h2 class="headline" id="briefHead">Loading your deals…</h2>
-        <p class="lead" id="briefLead">Deals appear here once a collector has read the ad, checked it, and confirmed the price in the last <span data-rule="priceFreshHours">24</span> hours.</p>
-      </div>
+    <!-- LISTINGS (home since v2.2): one search or all of them, a checked-deal strip, then the filtered list -->
+    <section class="panel" id="p-listings" role="tabpanel" aria-labelledby="tab-listings">
       <div class="connbar" id="connBar" role="status" hidden></div>
-      <div class="cards" id="dealCards"></div>
-      <section class="block" id="searchBlock" aria-labelledby="searchBlockTitle">
-        <div class="block-head">
-          <div><span class="section-label">Your searches</span><h2 class="block-title" id="searchBlockTitle">What the collectors are hunting.</h2></div>
-          <div class="seg" id="segBrief" role="group" aria-label="Choose a search"></div>
+      <div class="lhead">
+        <h2 class="headline" id="listHead">Loading your listings…</h2>
+        <div class="segrow">
+          <div class="seg" id="segListings" role="group" aria-label="Choose a search"></div>
+          <button type="button" class="newbtn" id="tNew" aria-expanded="false" aria-controls="quickBox">+ New search</button>
         </div>
-        <div class="cols" id="searchCols"></div>
-      </section>
-      <section class="block" aria-labelledby="quickTitle">
+        <div class="subline" id="subline"></div>
+      </div>
+      <section class="block" id="quickBox" hidden aria-labelledby="quickTitle">
         <div class="block-head">
           <div><span class="section-label">Hunt something new</span><h2 class="block-title" id="quickTitle">One line starts a search.</h2></div>
         </div>
@@ -315,61 +405,27 @@ legend{font-family:var(--display);font-size:16px;padding:0 4px;color:var(--head)
         </form>
         <p class="note">Years like 2019+ or 2011-2017, a ceiling like "under $350" and words like "no parts" are picked up; the rest becomes the keywords. On its first run the collector picks the sites for the item, writes what to verify, and decides how to price it.</p>
       </section>
-    </section>
-
-    <!-- LISTINGS -->
-    <section class="panel" id="p-listings" role="tabpanel" aria-labelledby="tab-listings" hidden>
-      <div class="intro">
-        <div class="eyebrow" id="listEyebrow">Listings</div>
-        <h2 class="headline" id="listHead">Listings</h2>
-      </div>
-      <div class="seg" id="segListings" role="group" aria-label="Choose a search"></div>
       <section class="block" id="summary" hidden></section>
-      <details class="fold paste" id="paste" hidden>
-        <summary>Add listings by hand</summary>
-        <div class="body">
-          <p class="note">Paste links or text from anywhere: Grok, a forum, a text from a friend, a Marketplace link from your phone. One listing per line. The collector reads each ad and fills in the rest on its next run.</p>
-          <textarea id="pasteText" placeholder="https://www.facebook.com/marketplace/item/123456789/ Blizzard Brahma 88 177cm $300"></textarea>
-          <div class="row-actions" style="justify-content:space-between;align-items:center"><span class="note" id="pasteNote"></span><button type="button" class="btn primary" id="pasteGo">Add to this search</button></div>
+      <section class="block paste" id="paste" hidden aria-label="Add listings by hand">
+        <p class="note">Paste links or text from anywhere: Grok, a forum, a text from a friend, a Marketplace link from your phone. One listing per line. The collector reads each ad and fills in the rest on its next run.</p>
+        <textarea id="pasteText" placeholder="https://www.facebook.com/marketplace/item/123456789/ Blizzard Brahma 88 177cm $300"></textarea>
+        <div class="row-actions" style="justify-content:space-between;align-items:center"><span class="note" id="pasteNote"></span><button type="button" class="btn primary" id="pasteGo">Add to this search</button></div>
+      </section>
+      <section class="strip" id="dealStrip" aria-label="Checked deals" hidden></section>
+      <div class="lgrid" id="lgrid" hidden>
+        <aside class="fpanel" id="fpanel" aria-label="Filters"></aside>
+        <div class="lmain">
+          <div class="fbar" id="fbar">
+            <input type="search" id="q" class="field" placeholder="Search listings" aria-label="Search titles, places and sellers">
+            <button type="button" class="btn" id="fopen" aria-controls="fpanel" aria-expanded="false">Filters</button>
+            <select id="fsort" class="field" aria-label="Sort"></select>
+          </div>
+          <div class="chips" id="chips" aria-live="polite"></div>
+          <section class="list" id="list">
+            <div class="empty" id="empty"><strong>No saved searches yet.</strong><br>Start one with + New search. The collector picks it up on its next run and listings land here.</div>
+          </section>
         </div>
-      </details>
-      <section class="filters" id="filters" hidden>
-        <input type="search" id="q" class="field" placeholder="Search listings: title, location, seller">
-        <span class="geo">
-          <select id="fradius" class="field" aria-label="Search radius">
-            <option value="25">Within 25 mi</option>
-            <option value="50">Within 50 mi</option>
-            <option value="100">Within 100 mi</option>
-            <option value="250">Within 250 mi</option>
-            <option value="500">Within 500 mi</option>
-            <option value="1000">Within 1,000 mi</option>
-            <option value="any">Any distance</option>
-          </select>
-          <span class="of">of</span>
-          <input id="fzip" class="field zip num" inputmode="numeric" maxlength="5" autocomplete="postal-code" aria-label="ZIP code to measure from" placeholder="ZIP">
-        </span>
-        <select id="fsource" class="field" aria-label="Site"></select>
-        <select id="fstatus" class="field" aria-label="Status">
-          <option value="open">New, watching, contacted</option>
-          <option value="all">All, including passed and gone</option>
-          <option value="new">New</option>
-          <option value="watching">Watching</option>
-          <option value="contacted">Contacted</option>
-          <option value="passed">Passed</option>
-        </select>
-        <select id="fsort" class="field" aria-label="Sort">
-          <option value="deal">Best deal first</option>
-          <option value="price">Lowest price</option>
-          <option value="new">Newest found</option>
-          <option value="near">Closest first</option>
-          <option value="year">Newest year</option>
-          <option value="miles">Lowest miles</option>
-        </select>
-        <label class="check"><input type="checkbox" id="fdeals"> Deals only</label>
-      </section>
-      <section class="list" id="list">
-        <div class="empty" id="empty"><strong>No saved searches yet.</strong><br>Start one from the Brief tab. The collector picks it up on its next run and listings land here.</div>
-      </section>
+      </div>
     </section>
 
     <!-- SITES -->
@@ -512,6 +568,7 @@ legend{font-family:var(--display);font-size:16px;padding:0 4px;color:var(--head)
   </form>
 </div>
 
+<div class="scrim" id="scrim" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
 <script>
@@ -536,8 +593,8 @@ const RULES = {
   brandedWords:["rebuilt","salvage","reconstructed","flood","lemon","junk","bonded"]
 };
 let RULES_DOC = null;
-const TABS = ["brief","listings","sites","checks","how"];
-const PAGE_VERSION = "2.1";
+const TABS = ["listings","sites","checks","how"];
+const PAGE_VERSION = "2.2";
 let ARCH = null, archState = "loading";
 const EMPTY = document.getElementById("empty").outerHTML;
 const $ = id => document.getElementById(id);
@@ -548,9 +605,10 @@ const num = v => (v===""||v==null||isNaN(Number(v))) ? null : Number(v);
 
 let db = null, canWrite = true;
 let searches = [], listings = [], runs = [], health = [], healthLoaded = false;
-let selected = null, editingId = null, tab = "brief";
+let selected = null, editingId = null, tab = "listings";
 let MK = new Map();
 try { selected = localStorage.getItem("ds.sel"); } catch(e) {}
+if(!selected) selected = "all";
 
 function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>t.hidden=true,2400); }
 function ago(iso){ if(!iso) return ""; const d=(Date.now()-new Date(iso).getTime())/60000; if(isNaN(d)) return ""; if(d<60) return Math.max(1,Math.round(d))+" min ago"; if(d<1440) return Math.round(d/60)+" h ago"; return Math.round(d/1440)+" d ago"; }
@@ -558,7 +616,7 @@ function hoursSince(iso){ const t=new Date(iso||"").getTime(); return isNaN(t)?I
 function site(id){ const d=health.find(h=>h.id===id)||{}; const b=SITE_DEFAULTS[id]||{}; return {id, name:d.name||b.name||id, how:d.how||b.how||"cloud", kind:d.kind||b.kind||"", home:d.home||b.home||"", ships:d.ships??b.ships??null, local:d.local??b.local??null}; }
 function allSiteIds(){ return [...new Set([...Object.keys(SITE_DEFAULTS), ...health.map(h=>h.id), ...searches.flatMap(s=>s.sources||[])])]; }
 function mustFor(s){ const src=s.sources||[]; const m=(Array.isArray(s.mustHave)&&s.mustHave.length)?s.mustHave:RULES.defaultMustHave; return m.filter(id=>src.includes(id)); }
-function current(){ return searches.find(x=>x.id===selected) || null; }
+function current(){ return searches.find(x=>x.id===selected) || searches.find(s=>s.active!==false) || searches[0] || null; }
 
 /* ---------- pricing ---------- */
 function median(arr){ if(!arr.length) return null; const a=[...arr].sort((x,y)=>x-y); const m=Math.floor(a.length/2); return a.length%2?a[m]:(a[m-1]+a[m])/2; }
@@ -574,7 +632,7 @@ function marketFor(s){
 }
 function refreshMarkets(){ MK=new Map(searches.map(s=>[s.id, marketFor(s)])); }
 
-let GEO=null, view={zip:"",radius:"any"}, viewFor=null;
+let GEO=null;
 fetch("geo.json").then(r=>r.ok?r.json():null).then(g=>{ if(g){ GEO=g; render(); } }).catch(()=>{});
 function zipCoords(z){ return (GEO && /^\d{5}$/.test(String(z||""))) ? (GEO.z[String(z)]||null) : null; }
 function coordsFor(l){
@@ -669,90 +727,35 @@ function routeLine(r){ const b=[`${ROUTE_NAME[r.key]||r.key}: ${ROUTE_STATE[r.st
 function lastRunBy(c){ return runs.find(r=>r.collector===c) || null; }
 function lastRunFor(id){ return runs.find(r=>r.searchId===id) || null; }
 
-/* ---------- shared search toggle ---------- */
-function segHtml(){
-  return searches.map(s=>{
-    const deals=openOf(s).filter(l=>score(l,s).isDeal).length;
-    const total=listings.filter(l=>l.searchId===s.id && !l.gone).length;
-    return `<button type="button" data-id="${esc(s.id)}" aria-pressed="${s.id===selected}" class="${s.active===false?"paused":""}">${deals?'<span class="dot" title="Has checked deals"></span>':""}${esc(s.name||"Untitled")}<span class="count">${total}</span></button>`;
-  }).join("");
+/* ---------- shared search toggle (Listings adds an "All searches" pill; Sites and Checks show one search at a time) ---------- */
+function isAll(){ return selected==="all"; }
+function segHtml(withAll){
+  const sel=withAll ? selected : current()?.id;
+  const pill=(id,name,deals,total,paused)=>`<button type="button" data-id="${esc(id)}" aria-pressed="${id===sel}" class="${paused?"paused":""}">${deals?'<span class="dot" title="Has checked deals"></span>':""}${esc(name)}<span class="count">${total}</span></button>`;
+  const per=searches.map(s=>({s, deals:openOf(s).filter(l=>score(l,s).isDeal).length, total:listings.filter(l=>l.searchId===s.id && !l.gone).length}));
+  const act=per.filter(x=>x.s.active!==false);
+  const all=(withAll && searches.length>1) ? pill("all","All searches", act.reduce((n,x)=>n+x.deals,0), act.reduce((n,x)=>n+x.total,0), false) : "";
+  return all + per.map(x=>pill(x.s.id, x.s.name||"Untitled", x.deals, x.total, x.s.active===false)).join("");
 }
-function wireSeg(el){ el.querySelectorAll("button[data-id]").forEach(b=>b.onclick=()=>{ selected=b.dataset.id; try{localStorage.setItem("ds.sel",selected)}catch(e){} render(); }); }
-
-/* ---------- Brief ---------- */
-// First photo of the ad, straight from the site. Facebook photo links expire after a few days, so a photo
-// that fails to load just disappears and the card shows text only.
-function thumb(l){ const u=(l.photoUrls||[])[0]; return u&&/^https:\/\//.test(u) ? `<img class="thumb" src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ""; }
+function wireSeg(el){ el.querySelectorAll("button[data-id]").forEach(b=>b.onclick=()=>{ selected=b.dataset.id; try{localStorage.setItem("ds.sel",selected)}catch(e){} openPanel=null; render(); }); }
 function shortRun(note){ const t=String(note||"").replace(/^rules v[\d.]+:\s*/,""); const m=t.match(/^[^(;.]*/); return (m?m[0]:t).trim().replace(/[,:]$/,""); }
-function renderBrief(){
-  const now=new Date();
-  $("briefEyebrow").textContent="Brief · "+now.toLocaleString("en-US",{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
-  const rows=[], leadRows=[]; let leads=0, concerns=0;
-  searches.forEach(s=>{ if(s.active===false) return; openOf(s).forEach(l=>{ const sc=score(l,s); if(sc.isDeal) rows.push({l,s,sc}); else if(sc.concern) concerns++; else if(sc.lead){ leads++; leadRows.push({l,s,sc}); } }); });
-  leadRows.sort((a,b)=>(b.sc.pct??0)-(a.sc.pct??0));
-  rows.sort((a,b)=>(b.sc.pct??0)-(a.sc.pct??0));
-  const active=searches.filter(s=>s.active!==false);
-  const siteCount=new Set(active.flatMap(s=>s.sources||[])).size;
-  const watching=active.reduce((n,s)=>n+openOf(s).length,0);
-  $("briefHead").textContent = rows.length
-    ? `${rows.length} checked deal${rows.length===1?"":"s"} right now${leads?`, ${leads} more being checked`:""}.`
-    : (leads ? `No checked deals yet. ${leads} cheap listing${leads===1?" is":"s are"} being checked.` : (searches.length?"No deals right now. The collectors keep watching.":"Start a search to begin."));
-  $("briefLead").textContent = searches.length
-    ? `${active.length} active search${active.length===1?"":"es"} watching ${watching} open listing${watching===1?"":"s"} on ${siteCount} site${siteCount===1?"":"s"}.${concerns?` ${concerns} cheap listing${concerns===1?" was":"s were"} checked and ${concerns===1?"has":"have"} concerns; they're on the Listings tab marked caution.`:""} A listing counts as a deal only after its ad has been read, its photos and seller checked, and its price confirmed on the ad in the last ${RULES.priceFreshHours} hours. Rebuilt and salvage titles never count.`
-    : "Type what you're hunting for below. The collector picks the sites, writes what to verify for that item, and starts reading ads on its next run.";
-  $("dealCards").innerHTML = rows.slice(0,10).map(({l,s,sc},i)=>{
-    const d = sc.homeDist==null ? "distance unknown" : `${Math.round(sc.homeDist).toLocaleString("en-US")} mi`;
-    return `<a class="card" href="${esc(l.url||"#")}" target="_blank" rel="noopener">
-      ${thumb(l)}
-      <div class="n">${String(i+1).padStart(2,"0")} · ${esc(s.name)} · ${esc(site(l.source).name)}</div>
-      <h3>${esc(l.title)}</h3>
-      <div class="price"><span class="amt">${money(l.price)}</span><span class="pill deal">${Math.round(sc.pct*100)}% under</span>${num(l.shipCost)?`<span class="note">+ ${money(l.shipCost)} shipping</span>`:""}</div>
-      <p>${l.check?.summary?esc("Checked: "+l.check.summary):""}</p>
-      <div class="note">${esc(l.location||"")} · ${sc.inRadius&&sc.homeDist!=null?"near you · ":""}${d}${s.pricing==="per-item"&&l.refPrice?` · fair used ${money(l.refPrice)}`:""}</div>
-      <div class="note conf">Price confirmed on the ad ${esc(ago(sc.confirmedAt))}</div>
-    </a>`; }).join("") + leadRows.slice(0, Math.max(0, 8-rows.length)).map(({l,s,sc})=>{
-    const why = l.verified===false ? "the ad hasn't been opened yet" : sc.reconfirm ? "its price being re-confirmed on the ad" : l.check?.status==="caution" ? "a re-check of an earlier concern: "+((l.check.flags||[])[0]||"see the listing") : "the photo review and red-flag checks";
-    return `<a class="card" href="${esc(l.url||"#")}" target="_blank" rel="noopener">
-      ${thumb(l)}
-      <div class="lbl">Being checked · ${esc(s.name)} · ${esc(site(l.source).name)}</div>
-      <h3>${esc(l.title)}</h3>
-      <div class="price"><span class="amt">${money(l.price)}</span><span class="pill near">${Math.round(sc.pct*100)}% under</span></div>
-      <p>Not a deal yet. Waiting on ${esc(why)}.</p>
-      <div class="note">${esc(l.location||"")}${sc.homeDist!=null?" · "+Math.round(sc.homeDist).toLocaleString("en-US")+" mi":""}</div>
-    </a>`; }).join("");
-  // search block
-  const s=current();
-  $("segBrief").innerHTML=segHtml(); wireSeg($("segBrief"));
-  if(!s){ $("searchCols").innerHTML=`<div class="col"><p class="muted">No searches yet.</p></div>`; return; }
-  const m=MK.get(s.id)||marketFor(s), run=lastRunFor(s.id), open=openOf(s);
-  const must=mustFor(s).map(siteStatus); const okMust=must.filter(x=>x.level==="ok").length;
-  const dl=[["Looking for",esc(s.keywords)+(s.exclude?`<span class="muted"> · not ${esc(s.exclude)}</span>`:"")],
-    ["Deal rule", s.pricing==="per-item" ? `${num(s.dealPct)??RULES.dealPctDefault}% under each model's fair used price` : `${num(s.dealPct)??RULES.dealPctDefault}% under ${money(m.value)} <span class="muted">(${esc(m.basis)})</span>`],
-    ["Ceiling", s.maxPrice?money(s.maxPrice):"none"],
-    ["Area", s.zip ? `near you = within ${esc(s.radiusMi??"any")} mi of ${esc(s.zip)}${s.shipOutside?"; farther only if it ships":"; deals anywhere in the US"}` : "nationwide"]];
-  $("searchCols").innerHTML=`
-    <div class="col"><dl class="terms">${dl.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl></div>
-    <div class="col">
-      <p>${open.length} open listing${open.length===1?"":"s"}; ${open.filter(l=>score(l,s).isDeal).length} checked deal${open.filter(l=>score(l,s).isDeal).length===1?"":"s"}, ${open.filter(l=>{const x=score(l,s); return x.lead&&!x.concern;}).length} being checked, ${open.filter(l=>score(l,s).concern).length} with concerns.</p>
-      <p class="note">${must.length?`${must.filter(x=>x.level!=="down").length} of ${must.length} must-have sites connected${must.some(x=>x.level==="partial")?` (${must.filter(x=>x.level==="partial").map(x=>x.name).join(", ")} only partly)`:""}.`:"Sites get picked on the first run."} ${run?`Last run ${esc(ago(run.at))}: ${esc(shortRun(run.note))}. The full note is under Search details on the Listings tab.`:"Not run yet."}</p>
-      <div class="row-actions"><button class="btn primary" type="button" id="goListings">Open listings</button><button class="btn" type="button" id="goSites">Sites</button>${canWrite?`<button class="btn" type="button" id="editBrief">Edit search</button>`:""}</div>
-    </div>`;
-  $("goListings").onclick=()=>setTab("listings"); $("goSites").onclick=()=>setTab("sites");
-  const eb=$("editBrief"); if(eb) eb.onclick=()=>openEditor(s);
-}
+
+/* ---------- site notice: one line at the top of Listings when a must-have site for the chosen searches is down or partial ---------- */
 function renderConnBar(){
   const bar=$("connBar");
-  if(!healthLoaded){ bar.hidden=true; return; }
-  const ids=[...new Set(searches.filter(s=>s.active!==false).flatMap(mustFor))];
-  if(!ids.length){ bar.hidden=true; return; }
+  if(!healthLoaded || tab!=="listings"){ bar.hidden=true; return; }
+  const ids=[...new Set(scopeSearches().flatMap(mustFor))];
   const must=ids.map(siteStatus);
   const down=must.filter(x=>x.level==="down"), part=must.filter(x=>x.level==="partial");
-  const newest=must.map(x=>x.route.at).filter(Boolean).sort().pop();
+  if(!down.length && !part.length){ bar.hidden=true; return; }
   const names=a=>a.map(x=>x.name).join(", ");
+  const needsYou=[...down,...part].some(x=>x.reason==="auth" || (x.reason==="stale" && x.route.key==="pc") || (x.level==="partial" && x.route.loggedIn===false));
   bar.hidden=false;
-  if(down.length){ bar.className="connbar bad"; bar.innerHTML=`<div class="lead2">${down.length} must-have site${down.length===1?"":"s"} not connected: ${esc(names(down))}. Deals there are being missed.</div><ul>${[...down,...part].map(x=>`<li><b>${esc(x.name)}:</b> ${esc(fixText(x))}</li>`).join("")}</ul>`; }
-  else if(part.length){ bar.className="connbar warn"; bar.innerHTML=`<div class="lead2">All ${must.length} must-have sites connected; ${esc(names(part))} only partly.</div><ul>${part.map(x=>`<li><b>${esc(x.name)}:</b> ${esc(fixText(x))}</li>`).join("")}</ul>`; }
-  else { bar.className="connbar ok"; bar.innerHTML=`<div class="lead2">All ${must.length} must-have sites connected<small>${esc(names(must))}${newest?" · last read "+esc(ago(newest)):""}</small></div>`; }
+  bar.className="connbar "+(down.length?"bad":"warn");
+  const what = down.length
+    ? `<b>${esc(names(down))}</b> not connected${part.length?` and <b>${esc(names(part))}</b> only partly`:""}, so deals there may be missed.`
+    : `<b>${esc(names(part))}</b> only partly connected.`;
+  bar.innerHTML=`${what} ${needsYou?"Needs you.":"Nothing for you to do."} <span class="go">Details on Sites</span>`;
 }
 
 /* ---------- Sites ---------- */
@@ -833,109 +836,357 @@ function renderChecks(){
       <p class="note">Listings for ${esc(s.name)} that aren't gone, by where they stand in the checks.</p></div>`;
 }
 
-/* ---------- Listings ---------- */
-function loadView(s){
-  const base=`${s.zip||""}|${s.radiusMi||""}`;
-  if(viewFor===s.id+"#"+base) return;
-  viewFor=s.id+"#"+base;
-  let saved=null; try{ saved=JSON.parse(localStorage.getItem("ds.geo."+s.id)||"null"); }catch(e){}
-  view=(saved && typeof saved==="object" && saved.base===base) ? {zip:String(saved.zip||""), radius:String(saved.radius||"any"), base} : {zip:s.zip||"", radius:"any", base};
-  const sel=$("fradius");
-  if(![...sel.options].some(o=>o.value===view.radius)){ const o=document.createElement("option"); o.value=view.radius; o.textContent=`Within ${Number(view.radius).toLocaleString("en-US")} mi`; sel.insertBefore(o, sel.querySelector('option[value="any"]')); }
-  sel.value=view.radius; $("fzip").value=view.zip; $("fzip").removeAttribute("aria-invalid");
+/* ---------- Listings (the home page since v2.2) ----------
+   Scope = one search, or "all" active searches. Filters (F) are kept per scope on this device (ds.f.<scope>) and in the
+   page address (#listings?...), so a filtered view can be bookmarked. Within a filter, picked values are OR; across
+   filters, AND. An empty pick list means "any". Counts beside each value are what that value would show with the
+   other filters applied. */
+const DSTATE=[["deal","Checked deal"],["checking","Being checked"],["concern","Has concerns"],["none","Not priced like a deal"],["branded","Branded title"],["failed","Failed check"]];
+const DLABEL=Object.fromEntries(DSTATE);
+const TIER={deal:0, checking:1, concern:2, none:3, branded:4, failed:5};
+const STATUSES=[["new","New"],["watching","Watching"],["contacted","Contacted"],["passed","Passed"],["gone","Gone"]];
+const SLABEL=Object.fromEntries(STATUSES);
+const OPEN_ST=["new","watching","contacted"];
+const SORTS=[["deal","Best deal"],["price","Lowest price"],["drop","Biggest price drop"],["new","Newest found"],["listed","Listed longest"],["near","Closest"],["year","Newest year"],["miles","Lowest miles"]];
+const RADII=[25,50,100,250,500,1000];
+let searchesLoaded=false, F=null, Ffor=null, bootParams=null, openPanel=null, panelKey="", fieldOn={year:false, miles:false}, lastRows=[];
+
+function scopeSearches(){ if(isAll()) return searches.filter(s=>s.active!==false); const s=current(); return s?[s]:[]; }
+function searchOf(l){ return searches.find(s=>s.id===l.searchId)||null; }
+function isBid(l){ return l.priceKind==="bid" || /\bauction\b/i.test(String(l.title||"")); }
+function dropOf(l){ const p=num(l.price); if(p==null) return 0; const prev=(l.priceHistory||[]).map(h=>num(h&&h.price)).filter(v=>v!=null); const hi=prev.length?Math.max(...prev):null; return (hi!=null && hi>p) ? hi-p : 0; }
+function dstate(sc){ if(sc.checkFailed) return "failed"; if(sc.isDeal) return "deal"; if(sc.brandedTitle) return "branded"; if(sc.concern) return "concern"; if(sc.lead) return "checking"; return "none"; }
+function stOf(l){ return l.gone ? "gone" : (l.status||"new"); }
+function homeZip(){ const s=isAll()?scopeSearches()[0]:current(); return s?.zip||""; }
+function effZip(){ return F.zip || homeZip(); }
+
+function defaultF(){ return {q:"", deal:[], pmin:null, pmax:null, ymin:null, ymax:null, mmax:null, dist:"any", zip:"", site:[], status:[...OPEN_ST], drop:false, sort:"deal"}; }
+function sanitizeF(f){
+  const list=(v,ok)=>(Array.isArray(v)?v:String(v||"").split(",")).map(x=>String(x).trim()).filter(x=>x && (!ok || ok.includes(x)));
+  const d=defaultF();
+  return {q:String(f.q||"").slice(0,80), deal:list(f.deal,Object.keys(TIER)), pmin:num(f.pmin), pmax:num(f.pmax), ymin:num(f.ymin), ymax:num(f.ymax), mmax:num(f.mmax),
+    dist:/^(any|near|\d{1,5})$/.test(String(f.dist))?String(f.dist):"any", zip:/^\d{5}$/.test(String(f.zip||""))?String(f.zip):"",
+    site:list(f.site), status:f.status==null?d.status:(f.status==="any"?[]:list(f.status,STATUSES.map(x=>x[0]))), drop:f.drop===true||f.drop==="1",
+    sort:SORTS.some(x=>x[0]===f.sort)?f.sort:"deal"};
 }
-function saveView(){ try{ if(viewFor) localStorage.setItem("ds.geo."+viewFor.split("#")[0], JSON.stringify(view)); }catch(e){} }
+function loadF(){
+  if(F && Ffor===selected) return;
+  Ffor=selected; F=defaultF();
+  let saved=null; try{ saved=JSON.parse(localStorage.getItem("ds.f."+selected)||"null"); }catch(e){}
+  if(saved && typeof saved==="object") F=sanitizeF(saved);
+  if(bootParams && (!bootParams.s || bootParams.s===selected)){ F=sanitizeF({...defaultF(), ...bootParams}); bootParams=null; }
+}
+function saveF(){ try{ localStorage.setItem("ds.f."+selected, JSON.stringify(F)); }catch(e){} writeHash(); }
+function writeHash(){
+  if(tab!=="listings" || !F) return;
+  const p=new URLSearchParams(), d=defaultF();
+  if(selected) p.set("s",selected);
+  if(F.q) p.set("q",F.q);
+  if(F.deal.length) p.set("deal",F.deal.join(","));
+  ["pmin","pmax","ymin","ymax","mmax"].forEach(k=>{ if(F[k]!=null) p.set(k,String(F[k])); });
+  if(F.dist!=="any") p.set("dist",F.dist);
+  if(F.zip) p.set("zip",F.zip);
+  if(F.site.length) p.set("site",F.site.join(","));
+  if(F.status.join(",")!==d.status.join(",")) p.set("status",F.status.length?F.status.join(","):"any");
+  if(F.drop) p.set("drop","1");
+  if(F.sort!=="deal") p.set("sort",F.sort);
+  const h="#listings"+(p.toString()?"?"+p.toString():"");
+  try{ if(location.hash!==h) history.replaceState(null,"",h); }catch(e){}
+}
+function readHash(){
+  const h=(location.hash||"").replace(/^#/,""), i=h.indexOf("?");
+  const t=i<0?h:h.slice(0,i);
+  if(i<0) return {tab:t, params:null};
+  const o={}; try{ for(const [k,v] of new URLSearchParams(h.slice(i+1))) o[k]=v; }catch(e){}
+  return {tab:t, params:o};
+}
+
+function scopeRows(){
+  const ids=new Set(scopeSearches().map(s=>s.id)), zip=effZip(), origin=zipCoords(zip);
+  return listings.filter(l=>ids.has(l.searchId)).map(l=>{
+    const s=searchOf(l), sc=score(l,s);
+    let d=milesBetween(origin,coordsFor(l));
+    if(d==null && zip===s.zip && typeof l.distanceMi==="number") d=l.distanceMi;
+    return {l, s, sc, d, ds:dstate(sc), st:stOf(l), bid:isBid(l), drop:dropOf(l)};
+  });
+}
+function passes(r, skip){
+  const l=r.l, p=num(l.price);
+  if(skip!=="q" && F.q && !`${l.title} ${l.location} ${l.seller} ${l.year||""}`.toLowerCase().includes(F.q.toLowerCase())) return false;
+  if(skip!=="deal" && F.deal.length && !F.deal.includes(r.ds)) return false;
+  if(skip!=="price" && (F.pmin!=null || F.pmax!=null)){ if(p==null || (F.pmin!=null && p<F.pmin) || (F.pmax!=null && p>F.pmax)) return false; }
+  if(skip!=="year" && fieldOn.year && (F.ymin!=null || F.ymax!=null)){ const y=num(l.year); if(y==null || (F.ymin!=null && y<F.ymin) || (F.ymax!=null && y>F.ymax)) return false; }
+  if(skip!=="miles" && fieldOn.miles && F.mmax!=null){ const m=num(l.miles); if(m==null || m>F.mmax) return false; }
+  // Unknown locations stay in the list under a distance filter, the same as before v2.2.
+  if(skip!=="dist" && F.dist!=="any"){ if(F.dist==="near"){ if(r.sc.homeDist!=null && !r.sc.inRadius) return false; } else if(r.d!=null && r.d>Number(F.dist)) return false; }
+  if(skip!=="site" && F.site.length && !F.site.includes(l.source)) return false;
+  if(skip!=="status" && F.status.length && !F.status.includes(r.st)) return false;
+  if(skip!=="drop" && F.drop && !r.drop) return false;
+  return true;
+}
+function tally(rows, skip, key){ const m=new Map(); rows.forEach(r=>{ if(passes(r,skip)){ const k=key(r); m.set(k,(m.get(k)||0)+1); } }); return m; }
+const pctOf=r=>r.sc.pct ?? -9;
+// Best deal first: deal state before percent, so branded titles, failed checks and auction bids can't top the list.
+function tierOf(r){ if(r.ds==="deal") return 0; if(r.bid) return 4; return TIER[r.ds]; }
+const SORTFN={
+  deal:(a,b)=>tierOf(a)-tierOf(b) || pctOf(b)-pctOf(a),
+  price:(a,b)=>(a.bid?1:0)-(b.bid?1:0) || (num(a.l.price)??1e12)-(num(b.l.price)??1e12),
+  drop:(a,b)=>b.drop-a.drop || pctOf(b)-pctOf(a),
+  new:(a,b)=>String(b.l.foundAt||"").localeCompare(String(a.l.foundAt||"")),
+  listed:(a,b)=>String(a.l.foundAt||"9").localeCompare(String(b.l.foundAt||"9")),
+  near:(a,b)=>(a.d??1e9)-(b.d??1e9),
+  year:(a,b)=>(num(b.l.year)??0)-(num(a.l.year)??0),
+  miles:(a,b)=>(num(a.l.miles)??1e12)-(num(b.l.miles)??1e12)
+};
+
+/* --- the filter panel: built when the scope or its fields change, otherwise only synced, so typing isn't interrupted --- */
+function spread(rows, get){ const v=rows.map(r=>num(get(r.l))).filter(x=>x!=null); return v.length?[Math.min(...v),Math.max(...v)]:null; }
+function optList(name, opts, counts, picked){
+  return opts.map(([v,label])=>{ const c=counts.get(v)||0, on=picked.includes(v);
+    return `<label class="opt${c||on?"":" zero"}"><input type="checkbox" data-f="${name}" value="${esc(v)}"${on?" checked":""}><span>${esc(label)}</span><span class="c" data-c="${esc(name+":"+v)}">${c}</span></label>`; }).join("");
+}
+function buildPanel(rows){
+  const all=isAll(), s=current();
+  const pr=spread(rows,l=>l.price), yr=spread(rows,l=>l.year), mi=spread(rows,l=>l.miles);
+  const siteIds=[...new Set(rows.map(r=>r.l.source))].sort((a,b)=>site(a).name.localeCompare(site(b).name));
+  const nearTxt=all?"Near you (each search's own radius)":(s?.radiusMi&&s?.zip?`Near you (${Number(s.radiusMi).toLocaleString("en-US")} mi of ${s.zip})`:"Near you");
+  const fm=n=>"$"+Math.round(n).toLocaleString("en-US");
+  $("fpanel").innerHTML=`
+    <div class="fp-head"><span>Filters</span><button type="button" class="btn" data-act="close">Done</button></div>
+    <div class="fgroup"><h3>Deal state</h3>${optList("deal",DSTATE,new Map(),F.deal)}</div>
+    <div class="fgroup"><h3>Price</h3><div class="range"><input class="field num" inputmode="numeric" data-n="pmin" aria-label="Lowest price" placeholder="${pr?fm(pr[0]):"Min"}"><span>to</span><input class="field num" inputmode="numeric" data-n="pmax" aria-label="Highest price" placeholder="${pr?fm(pr[1]):"Max"}"></div></div>
+    ${fieldOn.year?`<div class="fgroup"><h3>Year</h3><div class="range"><input class="field num" inputmode="numeric" maxlength="4" data-n="ymin" aria-label="Oldest year" placeholder="${yr?yr[0]:"From"}"><span>to</span><input class="field num" inputmode="numeric" maxlength="4" data-n="ymax" aria-label="Newest year" placeholder="${yr?yr[1]:"To"}"></div></div>`:""}
+    ${fieldOn.miles?`<div class="fgroup"><h3>Miles</h3><div class="range"><span>Up to</span><input class="field num" inputmode="numeric" data-n="mmax" aria-label="Most miles" placeholder="${mi?Math.round(mi[1]).toLocaleString("en-US"):"Any"}" style="grid-column:2/4"></div></div>`:""}
+    <div class="fgroup"><h3>Distance</h3><select class="field" data-s="dist" aria-label="Distance"><option value="any">Any distance</option><option value="near">${esc(nearTxt)}</option>${RADII.map(r=>`<option value="${r}">Within ${r.toLocaleString("en-US")} mi</option>`).join("")}</select>
+      <label class="zipl">of ZIP <input class="field zip num" data-z="zip" inputmode="numeric" maxlength="5" autocomplete="postal-code" aria-label="ZIP code to measure from" placeholder="${esc(homeZip()||"ZIP")}"></label></div>
+    <div class="fgroup"><h3>Site</h3>${optList("site",siteIds.map(id=>[id,site(id).name]),new Map(),F.site)}</div>
+    <div class="fgroup"><h3>Status</h3>${optList("status",STATUSES,new Map(),F.status)}</div>
+    <div class="fgroup"><h3>Price changes</h3><label class="opt"><input type="checkbox" data-b="drop"${F.drop?" checked":""}><span>Price dropped</span><span class="c" data-c="drop:1">0</span></label></div>
+    <div class="fp-foot"><button type="button" class="btn" data-act="clear">Clear all</button><button type="button" class="btn primary" data-act="close" id="fshow">Show listings</button></div>`;
+}
+function syncPanel(){
+  const p=$("fpanel"), act=document.activeElement;
+  p.querySelectorAll("input[data-f]").forEach(i=>{ i.checked=F[i.dataset.f].includes(i.value); });
+  p.querySelectorAll("input[data-n]").forEach(i=>{ if(i===act) return; const v=F[i.dataset.n]; i.value=v==null?"":(i.dataset.n.startsWith("y")?String(v):Number(v).toLocaleString("en-US")); });
+  const ds=p.querySelector("select[data-s=dist]"); if(ds){ if(![...ds.options].some(o=>o.value===F.dist)) F.dist="any"; ds.value=F.dist; }
+  const z=p.querySelector("input[data-z]"); if(z && z!==act){ z.value=F.zip; z.removeAttribute("aria-invalid"); }
+  const b=p.querySelector("input[data-b=drop]"); if(b) b.checked=F.drop;
+}
+function updateCounts(rows){
+  const p=$("fpanel");
+  const set=(name,m)=>p.querySelectorAll(`[data-c^="${name}:"]`).forEach(el=>{ const v=el.dataset.c.slice(name.length+1), c=m.get(v)||0; el.textContent=c; el.closest(".opt").classList.toggle("zero", !c && !el.closest(".opt").querySelector("input").checked); });
+  set("deal", tally(rows,"deal",r=>r.ds));
+  set("site", tally(rows,"site",r=>r.l.source));
+  set("status", tally(rows,"status",r=>r.st));
+  set("drop", tally(rows,"drop",r=>r.drop?"1":"0"));
+}
+
+/* --- applied filters as removable chips; the count says what the list shows --- */
+function chipList(){
+  const c=[], d=defaultF(), fm=n=>"$"+Math.round(n).toLocaleString("en-US");
+  if(F.q) c.push([`"${F.q}"`, ()=>{ F.q=""; $("q").value=""; }]);
+  if(F.deal.length) c.push([F.deal.map(v=>DLABEL[v]).join(", "), ()=>{ F.deal=[]; }]);
+  if(F.pmin!=null || F.pmax!=null) c.push([F.pmin!=null&&F.pmax!=null?`${fm(F.pmin)} to ${fm(F.pmax)}`:F.pmin!=null?`${fm(F.pmin)} and up`:`Up to ${fm(F.pmax)}`, ()=>{ F.pmin=F.pmax=null; }]);
+  if(fieldOn.year && (F.ymin!=null || F.ymax!=null)) c.push([F.ymin!=null&&F.ymax!=null?(F.ymin===F.ymax?`${F.ymin}`:`${F.ymin} to ${F.ymax}`):F.ymin!=null?`${F.ymin} or newer`:`${F.ymax} or older`, ()=>{ F.ymin=F.ymax=null; }]);
+  if(fieldOn.miles && F.mmax!=null) c.push([`Up to ${Math.round(F.mmax).toLocaleString("en-US")} mi`, ()=>{ F.mmax=null; }]);
+  if(F.dist!=="any") c.push([F.dist==="near"?"Near you":`Within ${Number(F.dist).toLocaleString("en-US")} mi of ${effZip()}`, ()=>{ F.dist="any"; }]);
+  if(F.site.length) c.push([F.site.length<=2?F.site.map(id=>site(id).name).join(", "):`${F.site.length} sites`, ()=>{ F.site=[]; }]);
+  if(F.status.join(",")!==d.status.join(",")) c.push([F.status.length?F.status.map(v=>SLABEL[v]).join(", "):"Any status", ()=>{ F.status=[...OPEN_ST]; }]);
+  if(F.drop) c.push(["Price dropped", ()=>{ F.drop=false; }]);
+  return c;
+}
+let CHIPS=[];
+function renderChips(n){
+  CHIPS=chipList();
+  const openOnly=F.status.join(",")===OPEN_ST.join(",");
+  $("chips").innerHTML=`<span>${n.toLocaleString("en-US")} ${openOnly?"open ":""}listing${n===1?"":"s"}</span>`
+    + CHIPS.map(([label],i)=>`<button type="button" class="chip" data-chip="${i}" aria-label="Remove filter: ${esc(label)}">${esc(label)}</button>`).join("")
+    + (CHIPS.length>1?`<button type="button" class="linkbtn" data-chip="all">Clear all</button>`:"");
+  $("fopen").textContent=CHIPS.length?`Filters (${CHIPS.length})`:"Filters";
+  const fs=$("fshow"); if(fs) fs.textContent=`Show ${n.toLocaleString("en-US")} listing${n===1?"":"s"}`;
+}
+function clearFilters(){ const sort=F.sort; F=defaultF(); F.sort=sort; $("q").value=""; }
+
+/* --- checked-deal strip: the Brief's deal cards, now at the top of the list; it follows every filter except Deal state --- */
+function dealCard(r){
+  const {l,s,sc}=r, u=(l.photoUrls||[])[0];
+  const dist=sc.homeDist==null?"":`${Math.round(sc.homeDist).toLocaleString("en-US")} mi`;
+  const where=[isAll()?s.name:"", site(l.source).name, l.location, sc.inRadius&&sc.homeDist!=null?"near you":"", dist].filter(Boolean).join(" · ");
+  return `<a class="dcard${u&&/^https:\/\//.test(u)?"":" noimg"}" href="${esc(l.url||"#")}" target="_blank" rel="noopener" title="${esc(l.check?.summary?"Checked: "+l.check.summary:"")}">
+    ${u&&/^https:\/\//.test(u)?`<img src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.classList.add('noimg');this.remove()">`:""}
+    <div class="dbody"><div class="dtop"><span class="amt">${money(l.price)}</span><span class="pill deal">${Math.round(sc.pct*100)}% under</span>${num(l.shipCost)?`<span class="note">+ ${money(l.shipCost)} ship</span>`:""}</div>
+    <h3>${esc(l.title)}</h3><div class="note">${esc(where)}${s.pricing==="per-item"&&l.refPrice?` · fair used ${money(l.refPrice)}`:""}</div>
+    <div class="note">Price confirmed on the ad ${esc(ago(sc.confirmedAt))}</div></div></a>`;
+}
+function renderStrip(rows){
+  const el=$("dealStrip");
+  if(F.deal.length && !F.deal.includes("deal")){ el.hidden=true; return; }
+  const pool=rows.filter(r=>!r.l.gone && passes(r,"deal"));
+  const deals=pool.filter(r=>r.ds==="deal").sort((a,b)=>pctOf(b)-pctOf(a));
+  const checking=pool.filter(r=>r.ds==="checking").length;
+  const filtered=CHIPS.some(([label])=>!/^(Checked deal|Being checked)/.test(label));
+  el.hidden=false;
+  if(!deals.length){
+    el.innerHTML=`<p class="note">No checked deals ${filtered?"match these filters":"right now"}.${checking?` ${checking} cheap listing${checking===1?" is":"s are"} being checked. <button type="button" class="linkbtn" id="showChecking">Show ${checking===1?"it":"them"}</button>`:""}</p>`;
+    const b=$("showChecking"); if(b) b.onclick=()=>{ F.deal=["checking"]; saveF(); renderResults(); };
+    return;
+  }
+  el.innerHTML=`<div class="strip-head"><span class="section-label">${deals.length} checked deal${deals.length===1?"":"s"}${filtered?" matching these filters":""}</span><span class="note">Ad read, photos and seller checked, price confirmed in the last ${RULES.priceFreshHours} hours</span></div>
+    <div class="strip-cards">${deals.slice(0,12).map(dealCard).join("")}</div>`;
+}
+
+/* --- one listing row --- */
+function rowHtml({l,s,sc,d,ds,st,bid}){
+  let pill="";
+  if(bid) pill=`<span class="pill over" title="An auction's current bid, not a final price">auction bid</span>`;
+  else if(sc.pct!=null){ const p=Math.round(sc.pct*100), cls=sc.isDeal?"deal":(sc.pct>0?"near":"over"); pill=`<span class="pill ${cls}">${p>0?`${p}% under`:p<0?`${-p}% over`:"at market"}</span>`; }
+  else if(s.pricing==="per-item") pill=`<span class="pill over">fair price pending</span>`;
+  const ceilingNote=(sc.ceiling!=null && !sc.underCeiling)?`<span>over your ${money(sc.ceiling)} ceiling</span>`:"";
+  const radiusNote=(sc.isDeal && sc.radius!=null && s.zip)?(sc.inRadius?`<span class="flag">near you</span>`:(sc.homeDist==null?`<span class="away">location unknown</span>`:`<span class="away">outside your ${Number(sc.radius).toLocaleString("en-US")} mi</span>`)):"";
+  const unv=l.gone?`<span class="pill over">gone</span>`:(l.verified===false?`<span class="pill unv">unverified</span>`:"");
+  const tb=branded(l)?`<span class="pill unv">${esc(l.titleStatus||"branded")} title</span>`:"";
+  const ck=l.check||null;
+  const ckLabel=!ck?"":ck.status==="passed"?`<span class="pill ok" title="${esc((ck.positives||[]).join('; '))}">checked ✓${ck.level>=3?" ×2":""}${ck.photos?` · ${ck.photos} photos`:""}</span>`:ck.status==="failed"?`<span class="pill bad">failed check</span>`:ck.status==="caution"?`<span class="pill unv">caution</span>`:`<span class="pill over">check pending</span>`;
+  const ckNote=ck&&(ck.summary||(ck.flags||[]).length)?`<span class="cnote${ck.status==="failed"?" bad":""}">${esc(ck.summary||"")}${(ck.flags||[]).length?` Concerns: ${esc(ck.flags.join("; "))}`:""}</span>`:"";
+  const lnote=l.note?`<span class="lnote">${esc(l.note)}</span>`:"";
+  const distTxt=d!=null?`<span class="dist">${Math.round(d).toLocaleString("en-US")} mi away</span>`:"";
+  const photos=(l.photosUrl||l.url)?`<a class="photos" href="${esc(l.photosUrl||l.url)}" target="_blank" rel="noopener">Ad ↗</a>`:"";
+  const prev=(l.priceHistory||[]).filter(h=>num(h.price)!=null && num(h.price)!==num(l.price)).slice(-1)[0]||null;
+  const wasHtml=prev?`<span class="was">${money(prev.price)}</span>`:"";
+  const change=prev?(num(prev.price)>num(l.price)?`<span class="cut">Price cut ${money(prev.price)} → ${money(l.price)}${l.priceChangedAt?" · spotted "+esc(ago(l.priceChangedAt)):""}</span>`:`<span class="up">Price up ${money(prev.price)} → ${money(l.price)}${l.priceChangedAt?" · spotted "+esc(ago(l.priceChangedAt)):""}</span>`):"";
+  const seenAt=[l.lastChecked,l.lastSeen].filter(Boolean).sort().pop();
+  const freshTxt=l.gone?"":l.verified===false?`<span class="away">price not confirmed on the ad yet</span>`:seenAt?`<span>price checked ${esc(ago(seenAt))}</span>`:"";
+  const ref=l.refPrice?`<span>fair used ${money(l.refPrice)}${l.refBasis?` (${esc(l.refBasis)})`:""}</span>`:"";
+  const ship=num(l.shipCost)?`<span>+ ${money(l.shipCost)} shipping</span>`:(l.ships===true?`<span>ships</span>`:"");
+  const lead=l.gone?"":ds==="deal"?'<span class="flag">Deal · </span>':ds==="concern"?'<span class="away">Has concerns · </span>':ds==="checking"?'<span class="away">Being checked · </span>':ds==="failed"?'<span style="color:var(--bad);font-weight:600">Likely not legit · </span>':"";
+  const acts=`<div class="acts" role="group" aria-label="Mark this listing">${[["watching","Watch","Watching"],["contacted","Contacted","Contacted"],["passed","Pass","Passed"]].map(([v,t,on])=>`<button type="button" class="act${v==="passed"?" pass":""}" data-id="${esc(l.id)}" data-v="${v}" aria-pressed="${l.status===v}"${canWrite?"":" disabled"}>${l.status===v?on:t}</button>`).join("")}</div>`;
+  return `<article class="row${(st==="passed"||l.gone)?" passed":""}">
+    <div class="price"><span class="amt">${money(l.price)}</span>${wasHtml}${l.gone?"":pill}</div>
+    <div class="title">${lead}${l.url?`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.title)}</a>`:esc(l.title)}</div>
+    ${acts}
+    <div class="meta">${photos}${unv}${tb}${ckLabel}${isAll()?`<span>${esc(s.name)}</span>`:""}<span>${esc(site(l.source).name)}</span>${l.miles?`<span class="num">${miles(l.miles)}</span>`:""}<span>${esc(l.location||"")}</span>${distTxt}${ship}<span>${esc(l.seller||"")}${l.sellerType?` (${esc(l.sellerType)})`:""}</span>${ref}${change}<span>found ${esc(ago(l.foundAt))}</span>${freshTxt}${ceilingNote}${radiusNote}${lnote}${ckNote}</div>
+  </article>`;
+}
+
+/* --- results: list, chips, counts and the deal strip; called on every filter change --- */
+function renderResults(){
+  const rows=lastRows=scopeRows();
+  const shown=rows.filter(r=>passes(r,null)).sort((a,b)=>(a.l.gone?1:0)-(b.l.gone?1:0) || SORTFN[F.sort](a,b));
+  renderChips(shown.length);
+  updateCounts(rows);
+  renderStrip(rows);
+  const list=$("list");
+  if(!shown.length){
+    const any=rows.length>0;
+    list.innerHTML=`<div class="empty"><strong>${any?"Nothing matches these filters.":"No listings collected yet."}</strong><br>${any?`<button type="button" class="linkbtn" data-chip="all">Clear all filters</button>`:"The collector adds listings here after its next run."}</div>`;
+    return;
+  }
+  list.innerHTML=shown.slice(0,400).map(rowHtml).join("") + (shown.length>400?`<div class="note">Showing the first 400 of ${shown.length.toLocaleString("en-US")}. Narrow the filters to see the rest.</div>`:"");
+}
+
+/* --- the whole tab --- */
 function renderSummary(s){
   const el=$("summary");
-  if(!s){ el.hidden=true; return; }
+  if(!s || isAll() || openPanel!=="details"){ el.hidden=true; return; }
   const m=MK.get(s.id)||marketFor(s), thr=num(s.dealPct)??RULES.dealPctDefault, run=lastRunFor(s.id);
   const yrs=(s.minYear||s.maxYear)?`${s.minYear||"any"} to ${s.maxYear||"any"}`:"any";
   const rule = s.pricing==="per-item" ? `${thr}% under each model's fair used price` : `${thr}% under ${money(m.value)} (${esc(m.basis)}), so ${m.value?money(m.value*(1-thr/100))+" or less":"once listings come in"}`;
   el.hidden=false;
-  const oneLine = `${s.pricing==="per-item"?`${thr}% under fair used`:`${thr}% under ${money(m.value)}`}${s.maxPrice?` · under ${money(s.maxPrice)}`:""}${s.zip?` · near you within ${esc(s.radiusMi??"any")} mi`:""}${run?` · last run ${esc(ago(run.at))}`:""}`;
-  el.innerHTML=`<details class="sumfold"><summary><span class="section-label">Search details</span> <span class="muted">${oneLine}</span></summary><div class="sumbody"><div class="block-head"><div><span class="section-label">${esc(s.category||"Search")}${s.active===false?" · paused":""}</span><h2 class="block-title">${esc(s.name)}</h2></div>${canWrite?`<button class="btn" id="editSearch" type="button">Edit search</button>`:""}</div>
+  el.innerHTML=`<div class="block-head"><div><span class="section-label">${esc(s.category||"Search")}${s.active===false?" · paused":""}</span><h2 class="block-title">${esc(s.name)}</h2></div>${canWrite?`<button class="btn" id="editSearch" type="button">Edit search</button>`:""}</div>
     <div class="cols">
       <div class="col"><dl class="terms"><dt>Keywords</dt><dd>${esc(s.keywords)}${s.exclude?`<span class="muted"> · not ${esc(s.exclude)}</span>`:""}</dd><dt>Deal rule</dt><dd>${rule}</dd><dt>Ceiling</dt><dd>${s.maxPrice?money(s.maxPrice):"none"}</dd><dt>Years / miles</dt><dd>${yrs} / ${s.maxMiles?miles(s.maxMiles):"any"}</dd></dl></div>
       <div class="col"><dl class="terms"><dt>Area</dt><dd>${s.zip?`within ${esc(s.radiusMi??"any")} mi of ${esc(s.zip)} counts as near you${s.shipOutside?"; farther only if it ships, priced with shipping":""}`:"nationwide"}</dd><dt>Sites</dt><dd>${(s.sources||[]).map(id=>esc(site(id).name)).join(", ")||"picked on the first run"}</dd><dt>Last run</dt><dd>${run?`${esc(ago(run.at))}: ${esc(run.note||"")}`:"not yet"}</dd></dl></div>
-    </div></div></details>`;
+    </div>`;
   const b=$("editSearch"); if(b) b.onclick=()=>openEditor(s);
 }
-function renderSourceFilter(s){
-  const sel=$("fsource"), cur=sel.value||"all";
-  const ids=[...new Set(listings.filter(l=>l.searchId===s?.id).map(l=>l.source))];
-  sel.innerHTML=`<option value="all">All sites</option>`+ids.map(id=>`<option value="${esc(id)}">${esc(site(id).name)}</option>`).join("");
-  sel.value=ids.includes(cur)?cur:"all";
-}
-function renderList(s){
-  const list=$("list");
-  if(!s){ list.innerHTML=EMPTY; return; }
-  const q=$("q").value.trim().toLowerCase(), fs=$("fsource").value, fst=$("fstatus").value, deals=$("fdeals").checked, sort=$("fsort").value;
-  const origin=zipCoords(view.zip), lim=view.radius==="any"?null:Number(view.radius);
-  let rows=listings.filter(l=>l.searchId===s.id).map(l=>{ let d=milesBetween(origin,coordsFor(l)); if(d==null && view.zip===s.zip && typeof l.distanceMi==="number") d=l.distanceMi; return {l, sc:score(l,s), d}; });
-  let outside=0;
-  rows=rows.filter(({l,sc,d})=>{
-    if(lim!=null && origin && d!=null && d>lim){ outside++; return false; }
-    const st=l.status||"new";
-    if(fst==="open" && (st==="passed"||l.gone)) return false;
-    if(fst!=="open" && fst!=="all" && st!==fst) return false;
-    if(fs!=="all" && l.source!==fs) return false;
-    if(deals && !sc.isDeal) return false;
-    if(q && !`${l.title} ${l.location} ${l.seller} ${l.year}`.toLowerCase().includes(q)) return false;
-    return true;
-  });
-  const by={deal:(a,b)=>(b.sc.pct??-9)-(a.sc.pct??-9), price:(a,b)=>(num(a.l.price)??1e12)-(num(b.l.price)??1e12), new:(a,b)=>String(b.l.foundAt||"").localeCompare(String(a.l.foundAt||"")), miles:(a,b)=>(num(a.l.miles)??1e12)-(num(b.l.miles)??1e12), near:(a,b)=>(a.d??1e9)-(b.d??1e9), year:(a,b)=>(num(b.l.year)??0)-(num(a.l.year)??0)}[sort];
-  rows.sort(by);
-  if(!rows.length){
-    const any=listings.some(l=>l.searchId===s.id);
-    const msg=!any?["No listings collected yet.","The collector adds listings here after its next run."]:outside?[`Nothing within ${Number(view.radius).toLocaleString("en-US")} mi of ${view.zip}.`,`${outside} listing${outside===1?" is":"s are"} farther out. Widen the radius to see ${outside===1?"it":"them"}.`]:["Nothing matches these filters.","Clear the search box or switch the status filter to All."];
-    list.innerHTML=`<div class="empty"><strong>${esc(msg[0])}</strong><br>${esc(msg[1])}</div>`; return;
-  }
-  const note=outside?`<div class="note">${outside} more listing${outside===1?"":"s"} outside ${Number(view.radius).toLocaleString("en-US")} mi.</div>`:"";
-  list.innerHTML=rows.map(({l,sc,d})=>{
-    let pill="";
-    if(sc.pct!=null){ const p=Math.round(sc.pct*100); const cls=sc.isDeal?"deal":(sc.pct>0?"near":"over"); pill=`<span class="pill ${cls}">${p>0?`${p}% under`:p<0?`${-p}% over`:"at market"}</span>`; }
-    else if(s.pricing==="per-item") pill=`<span class="pill over">fair price pending</span>`;
-    const ceilingNote=(sc.ceiling!=null && !sc.underCeiling)?`<span>over your ${money(sc.ceiling)} ceiling</span>`:"";
-    const radiusNote=(sc.isDeal && sc.radius!=null && s.zip)?(sc.inRadius?`<span class="flag">near you</span>`:(sc.homeDist==null?`<span class="away">location unknown</span>`:`<span class="away">outside your ${Number(sc.radius).toLocaleString("en-US")} mi</span>`)):"";
-    const unv=l.gone?`<span class="pill over">gone</span>`:(l.verified===false?`<span class="pill unv">unverified</span>`:"");
-    const tb=branded(l)?`<span class="pill unv">${esc(l.titleStatus||"branded")} title</span>`:"";
-    const ck=l.check||null;
-    const ckLabel=!ck?"":ck.status==="passed"?`<span class="pill ok" title="${esc((ck.positives||[]).join('; '))}">checked ✓${ck.level>=3?" ×2":""}${ck.photos?` · ${ck.photos} photos`:""}</span>`:ck.status==="failed"?`<span class="pill bad">failed check</span>`:ck.status==="caution"?`<span class="pill unv">caution</span>`:`<span class="pill over">check pending</span>`;
-    const ckNote=ck&&(ck.summary||(ck.flags||[]).length)?`<span class="cnote${ck.status==="failed"?" bad":""}">${esc(ck.summary||"")}${(ck.flags||[]).length?` Concerns: ${esc(ck.flags.join("; "))}`:""}</span>`:"";
-    const lnote=l.note?`<span class="lnote">${esc(l.note)}</span>`:"";
-    const distTxt=d!=null?`<span class="dist">${Math.round(d).toLocaleString("en-US")} mi away</span>`:"";
-    const photos=(l.photosUrl||l.url)?`<a class="photos" href="${esc(l.photosUrl||l.url)}" target="_blank" rel="noopener">Ad ↗</a>`:"";
-    const prev=(l.priceHistory||[]).filter(h=>num(h.price)!=null && num(h.price)!==num(l.price)).slice(-1)[0]||null;
-    const wasHtml=prev?`<span class="was">${money(prev.price)}</span>`:"";
-    const change=prev?(num(prev.price)>num(l.price)?`<span class="cut">Price cut ${money(prev.price)} → ${money(l.price)}${l.priceChangedAt?" · spotted "+esc(ago(l.priceChangedAt)):""}</span>`:`<span class="up">Price up ${money(prev.price)} → ${money(l.price)}${l.priceChangedAt?" · spotted "+esc(ago(l.priceChangedAt)):""}</span>`):"";
-    const seenAt=[l.lastChecked,l.lastSeen].filter(Boolean).sort().pop();
-    const freshTxt=l.gone?"":l.verified===false?`<span class="away">price not confirmed on the ad yet</span>`:seenAt?`<span>price checked ${esc(ago(seenAt))}</span>`:"";
-    const ref=l.refPrice?`<span>fair used ${money(l.refPrice)}${l.refBasis?` (${esc(l.refBasis)})`:""}</span>`:"";
-    const ship=num(l.shipCost)?`<span>+ ${money(l.shipCost)} shipping</span>`:(l.ships===true?`<span>ships</span>`:"");
-    const st=l.status||"new";
-    const opts=["new","watching","contacted","passed"].map(v=>`<option value="${v}"${v===st?" selected":""}>${v[0].toUpperCase()+v.slice(1)}</option>`).join("");
-    return `<article class="row${(st==="passed"||l.gone)?" passed":""}">
-      <div class="price"><span class="amt">${money(l.price)}</span>${wasHtml}${l.gone?"":pill}</div>
-      <div class="title">${(sc.isDeal&&!l.gone)?'<span class="flag">Deal · </span>':(sc.concern&&!l.gone)?'<span class="away">Has concerns · </span>':(sc.lead&&!l.gone)?'<span class="away">Check · </span>':(sc.checkFailed&&!l.gone)?'<span style="color:var(--bad);font-weight:600">Likely not legit · </span>':""}${l.url?`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.title)}</a>`:esc(l.title)}</div>
-      <select class="field" aria-label="Status for ${esc(l.title)}" data-id="${esc(l.id)}" ${canWrite?"":"disabled"}>${opts}</select>
-      <div class="meta">${photos}${unv}${tb}${ckLabel}<span>${esc(site(l.source).name)}</span>${l.miles?`<span class="num">${miles(l.miles)}</span>`:""}<span>${esc(l.location||"")}</span>${distTxt}${ship}<span>${esc(l.seller||"")}${l.sellerType?` (${esc(l.sellerType)})`:""}</span>${ref}${change}<span>found ${esc(ago(l.foundAt))}</span>${freshTxt}${ceilingNote}${radiusNote}${lnote}${ckNote}</div>
-    </article>`;}).join("")+note;
-  list.querySelectorAll("select[data-id]").forEach(sel=>sel.onchange=async()=>{
-    if(!db) return;
-    try{ await db.collection("listings").doc(sel.dataset.id).update({status:sel.value}); toast("Marked "+sel.value); }
-    catch(e){ toast("Couldn't save that change. Try again."); }
-  });
+function renderSubline(){
+  const el=$("subline"), s=current();
+  if(!searches.length){ el.innerHTML=""; el.hidden=true; return; }
+  if(isAll()){ el.innerHTML=""; el.hidden=true; return; }
+  el.hidden=false;
+  const m=MK.get(s.id)||marketFor(s), thr=num(s.dealPct)??RULES.dealPctDefault, run=lastRunFor(s.id);
+  const one=`${s.pricing==="per-item"?`${thr}% under fair used`:`${thr}% under ${money(m.value)}`}${s.maxPrice?` · under ${money(s.maxPrice)}`:""}${s.zip?` · near you within ${esc(s.radiusMi??"any")} mi`:""}${run?` · last run ${esc(ago(run.at))}`:""}`;
+  el.innerHTML=`<span>${one}</span><button type="button" class="linkbtn" data-panel="details" aria-expanded="${openPanel==="details"}" aria-controls="summary">Search details</button>${canWrite?`<button type="button" class="linkbtn" data-panel="paste" aria-expanded="${openPanel==="paste"}" aria-controls="paste">Add listings by hand</button>`:""}`;
 }
 function renderListings(){
-  const s=current();
-  $("segListings").innerHTML=segHtml(); wireSeg($("segListings"));
-  if(s){ const open=openOf(s).length; $("listEyebrow").textContent=`Listings · ${s.name}`; $("listHead").textContent=`${open} open listing${open===1?"":"s"} for ${s.name}, best deals first.`; }
-  else { $("listEyebrow").textContent="Listings"; $("listHead").textContent="No searches yet."; }
-  renderSummary(s);
-  $("filters").hidden=!s; $("paste").hidden=!s||!canWrite;
-  if(s){ loadView(s); renderSourceFilter(s); $("pasteGo").textContent=`Add to ${s.name}`; }
-  renderList(s);
+  loadF();
+  const ss=scopeSearches(), s=current();
+  $("segListings").innerHTML=segHtml(true); wireSeg($("segListings"));
+  if(searchesLoaded && !searches.length && openPanel==null) openPanel="new";
+  $("quickBox").hidden=openPanel!=="new"; $("tNew").setAttribute("aria-expanded", String(openPanel==="new")); $("tNew").hidden=!canWrite;
+  renderSubline(); renderSummary(s);
+  $("paste").hidden=!(openPanel==="paste" && s && !isAll() && canWrite);
+  if(s) $("pasteGo").textContent=`Add to ${s.name}`;
+  $("lgrid").hidden=!ss.length;
+  if(!ss.length){ $("dealStrip").hidden=true; $("listHead").textContent=!searchesLoaded?"Loading your listings…":searches.length?"Every search is paused.":"No searches yet."; return; }
+  const rows=scopeRows(), open=rows.filter(r=>!r.l.gone && r.st!=="passed");
+  const nd=open.filter(r=>r.ds==="deal").length;
+  $("listHead").textContent = isAll()
+    ? `${nd} checked deal${nd===1?"":"s"} across ${ss.length} search${ss.length===1?"":"es"}, ${open.length.toLocaleString("en-US")} open listings.`
+    : `${s.name}: ${nd} checked deal${nd===1?"":"s"} in ${open.length.toLocaleString("en-US")} open listings.`;
+  const live=rows.filter(r=>!r.l.gone), has=k=>live.length>0 && live.filter(r=>num(r.l[k])!=null).length>=live.length/2;
+  fieldOn={year:has("year"), miles:has("miles")};
+  const key=[selected, healthLoaded, fieldOn.year, fieldOn.miles, [...new Set(rows.map(r=>r.l.source))].sort().join(","), homeZip(), current()?.radiusMi].join("|");
+  if(key!==panelKey){ panelKey=key; buildPanel(rows); }
+  $("fsort").innerHTML=SORTS.map(([v,t])=>`<option value="${v}">${t}</option>`).join(""); $("fsort").value=F.sort;
+  if(document.activeElement!==$("q")) $("q").value=F.q;
+  syncPanel();
+  renderResults();
+  writeHash();
 }
+
+/* --- events --- */
+function setSheet(open){
+  const p=$("fpanel"), scrim=$("scrim"), was=p.classList.contains("open");
+  if(!open && !was) return;
+  p.classList.toggle("open",open); scrim.hidden=!open; document.body.classList.toggle("sheet-open",open);
+  $("fopen").setAttribute("aria-expanded",String(open));
+  if(open){ const f=p.querySelector("input,select,button"); if(f) setTimeout(()=>f.focus({preventScroll:true}),50); } else if(matchMedia("(max-width:900px)").matches) $("fopen").focus({preventScroll:true});
+}
+function changed(){ saveF(); renderResults(); }
+let typeTimer=null;
+function typed(){ clearTimeout(typeTimer); typeTimer=setTimeout(changed,250); }
+$("fpanel").addEventListener("change",e=>{
+  const t=e.target;
+  if(t.matches("input[data-f]")){ const k=t.dataset.f; F[k]=t.checked?[...new Set([...F[k],t.value])]:F[k].filter(v=>v!==t.value); changed(); }
+  else if(t.matches("select[data-s=dist]")){ F.dist=t.value; changed(); }
+  else if(t.matches("input[data-b=drop]")){ F.drop=t.checked; changed(); }
+});
+$("fpanel").addEventListener("input",e=>{
+  const t=e.target;
+  if(t.matches("input[data-n]")){ const raw=t.value.replace(/[^\d.]/g,""); F[t.dataset.n]=raw===""?null:num(raw); typed(); }
+  else if(t.matches("input[data-z]")){
+    const v=t.value.replace(/\D/g,"").slice(0,5); if(v!==t.value) t.value=v;
+    if(v.length===5 && GEO && !GEO.z[v]){ t.setAttribute("aria-invalid","true"); return; }
+    t.removeAttribute("aria-invalid");
+    if(v.length===5 || v===""){ F.zip=v; changed(); }
+  }
+});
+$("fpanel").addEventListener("click",e=>{
+  const a=e.target.closest("[data-act]"); if(!a) return;
+  if(a.dataset.act==="close") setSheet(false);
+  if(a.dataset.act==="clear"){ clearFilters(); syncPanel(); changed(); }
+});
+$("fopen").onclick=()=>setSheet(!$("fpanel").classList.contains("open"));
+$("scrim").onclick=()=>setSheet(false);
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && $("fpanel").classList.contains("open")) setSheet(false); });
+$("q").addEventListener("input",()=>{ F.q=$("q").value.trim(); typed(); });
+$("fsort").addEventListener("change",()=>{ F.sort=$("fsort").value; changed(); });
+document.addEventListener("click",e=>{
+  const c=e.target.closest("[data-chip]"); if(!c || !$("p-listings").contains(c)) return;
+  if(c.dataset.chip==="all") clearFilters(); else { const x=CHIPS[Number(c.dataset.chip)]; if(x) x[1](); }
+  syncPanel(); changed();
+});
+$("subline").addEventListener("click",e=>{ const b=e.target.closest("[data-panel]"); if(!b) return; openPanel=openPanel===b.dataset.panel?null:b.dataset.panel; renderListings(); });
+$("tNew").onclick=()=>{ openPanel=openPanel==="new"?null:"new"; renderListings(); if(openPanel==="new") $("quickText").focus(); };
+$("list").addEventListener("click",async e=>{
+  const b=e.target.closest("button.act"); if(!b || !db || !canWrite) return;
+  const l=listings.find(x=>x.id===b.dataset.id); if(!l) return;
+  const before=l.status||"new", next=b.getAttribute("aria-pressed")==="true"?"new":b.dataset.v;
+  l.status=next; renderResults();
+  try{ await db.collection("listings").doc(l.id).update({status:next}); toast(next==="new"?"Mark cleared":next==="passed"?"Passed. Hidden from the open list.":`Marked ${next}`); }
+  catch(err){ l.status=before; renderResults(); toast("Couldn't save that change. Try again."); }
+});
 
 /* ---------- How it works (meta/architecture; read only, nothing else depends on it) ---------- */
 const HW_KIND = {input:"Input", job:"Scheduled job", rules:"Rules", service:"Outside service", data:"Data store", output:"Output", page:"Page"};
@@ -1159,27 +1410,28 @@ try{ document.fonts?.ready?.then(()=>{ if(tab==="how") hwEdges(); }); }catch(e){
 
 /* ---------- tabs ---------- */
 function setTab(t, fromHash){
-  tab=TABS.includes(t)?t:"brief";
+  tab=TABS.includes(t)?t:"listings";
   TABS.forEach(x=>{ $("p-"+x).hidden=(x!==tab); $("tab-"+x).setAttribute("aria-selected", String(x===tab)); });
-  if(!fromHash){ try{ if(location.hash!=="#"+tab) location.hash=tab; }catch(e){} }
+  if(tab!=="listings") setSheet(false);
+  if(!fromHash){ try{ if(readHash().tab!==tab) location.hash=tab; }catch(e){} }
   render();
   window.scrollTo({top:0});
 }
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
-window.addEventListener("hashchange",()=>{ const h=location.hash.replace("#",""); if(TABS.includes(h) && h!==tab) setTab(h,true); });
+// Old #brief links open the list, which took over the Brief's job in v2.2.
+window.addEventListener("hashchange",()=>{ const h=readHash(); const t=h.tab==="brief"?"listings":h.tab; if(h.params && t==="listings"){ bootParams=h.params; if(h.params.s) selected=h.params.s; Ffor=null; } if(TABS.includes(t) && (t!==tab || h.params)) setTab(t,true); });
 
 function render(){
-  if(!searches.find(s=>s.id===selected)) selected=searches[0]?.id||null;
+  if(searchesLoaded && selected!=="all" && !searches.find(s=>s.id===selected)) selected=searches.length?"all":null;
   refreshMarkets();
   renderRules();
   renderConnBar();
-  if(tab==="brief") renderBrief();
   if(tab==="listings") renderListings();
   if(tab==="sites") renderSites();
   if(tab==="checks") renderChecks();
   if(tab==="how"){ try{ renderHow(); }catch(e){ ARCH=null; archState="missing"; try{ renderHow(); }catch(_){} } }
 }
-setInterval(()=>{ if(tab==="brief"||tab==="sites") render(); }, 5*60*1000);
+setInterval(()=>{ if(tab==="listings"||tab==="sites") render(); }, 5*60*1000);
 $("connBar").addEventListener("click",()=>setTab("sites"));
 
 /* ---------- quick add ---------- */
@@ -1209,7 +1461,7 @@ $("quick").addEventListener("submit", async e=>{
     createdAt:now, updatedAt:now };
   const id=(p.keywords.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"search")+"-"+Math.random().toString(36).slice(2,6);
   $("quickGo").disabled=true;
-  try{ await db.collection("searches").doc(id).set(body); selected=id; try{localStorage.setItem("ds.sel",id)}catch(e){} $("quickText").value=""; toast("Hunting. The collector picks it up on its next run."); }
+  try{ await db.collection("searches").doc(id).set(body); selected=id; openPanel=null; try{localStorage.setItem("ds.sel",id)}catch(e){} $("quickText").value=""; toast("Hunting. The collector picks it up on its next run."); render(); }
   catch(err){ toast("Couldn't save the search. Try again."); }
   finally{ $("quickGo").disabled=false; }
 });
@@ -1249,14 +1501,6 @@ $("pasteGo").onclick=async()=>{
   $("pasteNote").textContent=`${added} added${skipped?`, ${skipped} skipped (already here or unreadable)`:""}.`;
   toast(`${added} listing${added===1?"":"s"} added`);
 };
-$("fradius").addEventListener("change",()=>{ view.radius=$("fradius").value; saveView(); renderList(current()); });
-$("fzip").addEventListener("input",()=>{
-  const v=$("fzip").value.replace(/\D/g,"").slice(0,5); if(v!==$("fzip").value) $("fzip").value=v;
-  if(v.length===5 && GEO && !GEO.z[v]){ $("fzip").setAttribute("aria-invalid","true"); return; }
-  $("fzip").removeAttribute("aria-invalid");
-  if(v.length===5||v===""){ view.zip=v; saveView(); renderList(current()); }
-});
-["q","fsource","fstatus","fsort","fdeals"].forEach(id=>$(id).addEventListener(id==="q"?"input":"change",()=>renderList(current())));
 
 /* ---------- editor ---------- */
 let delArmed=false;
@@ -1315,12 +1559,12 @@ $("e_delete").onclick=async()=>{
     $("status").textContent=`${searches.length} search${searches.length===1?"":"es"} · ${listings.length} listing${listings.length===1?"":"s"} · ${deals} deal${deals===1?"":"s"}`; } };
   const fail=e=>{ clearTimeout(timer); $("status").textContent=e?.code==="revoked"?"Access to this page's data ended.":"Couldn't load your data. Reload the page to try again."; };
   db.collection("meta").onSnapshot(snap=>{ const d=snap.docs.find(x=>x.id==="rules"); applyRulesDoc(d?d.data():null); const a=snap.docs.find(x=>x.id==="architecture"); try{ setArch(a?a.data():null); }catch(e){ ARCH=null; archState="missing"; } refreshMarkets(); render(); }, ()=>{ ARCH=null; archState="missing"; if(tab==="how") render(); });
-  db.collection("searches").onSnapshot(snap=>{ searches=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||""))); if(!snap.metadata.fromCache) got.s=true; done(); render(); }, fail);
+  db.collection("searches").onSnapshot(snap=>{ searches=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||""))); if(!snap.metadata.fromCache){ got.s=true; searchesLoaded=true; } done(); render(); }, fail);
   db.collection("listings").onSnapshot(snap=>{ listings=snap.docs.map(d=>({id:d.id,...d.data()})); if(!snap.metadata.fromCache) got.l=true; done(); render(); }, fail);
   db.collection("runs").orderBy("at","desc").limit(100).onSnapshot(snap=>{ runs=snap.docs.map(d=>({id:d.id,...d.data()})); render(); }, ()=>{});
   db.collection("sources").onSnapshot(snap=>{ health=snap.docs.map(d=>({id:d.id,...d.data()})); if(!snap.metadata.fromCache) healthLoaded=true; render(); }, ()=>{});
 })();
-(function boot(){ const h=(location.hash||"").replace("#",""); setTab(TABS.includes(h)?h:"brief", true); })();
+(function boot(){ const h=readHash(); const t=h.tab==="brief"||!h.tab?"listings":h.tab; if(h.params && t==="listings"){ bootParams=h.params; if(h.params.s) selected=h.params.s; } setTab(TABS.includes(t)?t:"listings", true); })();
 </script>
 
 
