@@ -293,6 +293,45 @@ def score(l, s, market, nums):
             "checkPassed": passed}
 
 
+# ---------------------------------------------------------------- probably gone (v2.4, mirrors probablyGone() in index.html)
+def site_read_at(sites, source, sid):
+    """Latest time a route covering this search read the site fine (state ok or partial)."""
+    best = ""
+    for k in ("pc", "cloud"):
+        r = (sites.get(source) or {}).get(k)
+        if not isinstance(r, dict) or (isinstance(r.get("searches"), list) and sid not in r["searches"]):
+            continue
+        for t in (r.get("lastOk"), r.get("at") if r.get("state") in ("ok", "partial") else None):
+            if t and str(t) > best:
+                best = str(t)
+    return best or None
+
+
+def last_evidence(l):
+    """The last time anything showed the listing was live: a search result, an opened ad or a check."""
+    return max([str(x) for x in (l.get("lastSeen"), l.get("lastChecked"), (l.get("check") or {}).get("at"), l.get("foundAt")) if x] or [""]) or None
+
+
+def probably_gone(l, sc, sites, nums):
+    """Days unseen when an open listing counts as probably gone, else None. Probably gone = status new, not
+    priced like a deal, nothing has shown it for numbers.probablyGoneDays days, and its site has been read
+    fine since that many days after it was last seen (so a paused or blocked site hides nothing). Nothing is
+    stored: the next search result or opened ad that shows it brings it back."""
+    days = float(nums.get("probablyGoneDays", 7) or 0)
+    if days <= 0 or l.get("gone") or (l.get("status") or "new") != "new":
+        return None
+    ev = parse_iso(last_evidence(l))
+    if not ev:
+        return None
+    age = (datetime.now(timezone.utc) - ev).total_seconds() / 86400
+    if age < days or (sc["underMarket"] and sc["underCeiling"]):
+        return None
+    read = parse_iso(site_read_at(sites, l.get("source"), l.get("searchId")))
+    if not read or read < ev + timedelta(days=days):
+        return None
+    return int(age)
+
+
 # ---------------------------------------------------------------- mutations (each is replayable)
 CONFIRMED = "Confirmed by Cameron"
 
@@ -647,6 +686,8 @@ def line(l, sc=None):
         bits.append(f"needs L{sc['needLevel']} check")
     if l.get("gone"):
         bits.append("GONE")
+    elif sc and sc.get("probablyGone") is not None:
+        bits.append(f"PROBABLY GONE (unseen {sc['probablyGone']} d)")
     if l.get("status") not in (None, "new"):
         bits.append(l["status"])
     bits.append(f"seen {str(l.get('lastSeen') or '')[:16]}")
@@ -661,8 +702,11 @@ def cmd_summary(st):
     for sid, s in st.searches().items():
         mine = {k: v for k, v in L.items() if v.get("searchId") == sid}
         mk = market_for(s, sid, L, nums)
-        open_ = [l for l in mine.values() if not l.get("gone") and l.get("status") != "passed"]
-        scored = [(l, score(l, s, mk, nums)) for l in open_]
+        sites = st.sites()
+        live = [(l, score(l, s, mk, nums)) for l in mine.values() if not l.get("gone") and l.get("status") != "passed"]
+        pg = [l for l, sc in live if probably_gone(l, sc, sites, nums) is not None]
+        scored = [(l, sc) for l, sc in live if probably_gone(l, sc, sites, nums) is None]
+        open_ = [l for l, _ in scored]
         leads = [x for x in scored if x[1]["photoWork"] or x[1]["reconfirm"]]
         concerns = [x for x in scored if x[1]["concern"]]
         deals = [x for x in scored if x[1]["isDeal"]]
@@ -671,7 +715,7 @@ def cmd_summary(st):
         print(f"\n[{sid}] {s.get('name')} · {'active' if s.get('active') else 'PAUSED'} · sources {','.join(s.get('sources') or [])}")
         print(f"  {len(open_)} open · market {money(mk['value']) if mk['value'] else '-'} ({mk['basis']}) · "
               f"{len(deals)} deals · {len(leads)} deal-priced needing checks · {len(concerns)} with concerns (caution) · "
-              f"{len(pend)} pending checks · {len(stale)} due for refresh")
+              f"{len(pend)} pending checks · {len(stale)} due for refresh · {len(pg)} probably gone (hidden)")
     print("\nSITES (route state, last read)")
     for sid, s in sorted(st.sites().items()):
         rs = []
@@ -695,24 +739,26 @@ def cmd_summary(st):
 
 def cmd_listings(st, argv):
     if not argv:
-        die("listings <searchId> [--source S] [--open] [--pending] [--leads] [--stale] [--json]")
+        die("listings <searchId> [--source S] [--open] [--pending] [--leads] [--stale] [--json]  (--open leaves out gone, passed and probably gone)")
     sid = argv[0]
     s = st.searches().get(sid) or die(f"no search {sid}")
     nums = st.rules().get("numbers", {})
     L = st.all_listings()
     mk = market_for(s, sid, L, nums)
+    sites = st.sites()
     rows = []
     for l in L.values():
         if l.get("searchId") != sid:
             continue
         if "--source" in argv and l.get("source") != argv[argv.index("--source") + 1]:
             continue
-        open_ = not l.get("gone") and l.get("status") != "passed"
+        sc = score(l, s, mk, nums)
+        sc["probablyGone"] = probably_gone(l, sc, sites, nums)
+        open_ = not l.get("gone") and l.get("status") != "passed" and sc["probablyGone"] is None
         if "--open" in argv and not open_:
             continue
         if "--pending" in argv and (l.get("check") or {}).get("status") != "pending":
             continue
-        sc = score(l, s, mk, nums)
         if "--leads" in argv and not (sc["lead"] and open_):
             continue
         if "--stale" in argv and not (open_ and refresh_due(l, sc, nums)[0]):
@@ -754,6 +800,7 @@ def cmd_queue(st, argv):
     mk = market_for(s, sid, L, nums)
     who = argv[argv.index("--for") + 1] if "--for" in argv else None
     srcs = collector_sources(st, who) if kind == "refresh" else None
+    sites = st.sites()
     rows = []
     for l in L.values():
         if l.get("searchId") != sid or l.get("gone") or l.get("status") == "passed":
@@ -774,11 +821,13 @@ def cmd_queue(st, argv):
             unv = l.get("verified") is False
             if not (due or sc["lead"] or unv):
                 continue
-            tier = 0 if sc["lead"] else 1 if l.get("status") in ("watching", "contacted") else 2
+            pg = probably_gone(l, sc, sites, nums)
+            # v2.4: probably-gone listings come last; re-opening one that is still live brings it back.
+            tier = 0 if sc["lead"] else 1 if l.get("status") in ("watching", "contacted") else 3 if pg is not None else 2
             if tier == 1 and not due:
                 continue
             last = l.get("lastChecked") or l.get("lastSeen") or ""
-            why = ["deal-priced", "you marked it", "unverified" if unv else ("slow tier" if slow else "due")][tier]
+            why = ["deal-priced", "you marked it", "unverified" if unv else ("slow tier" if slow else "due"), f"probably gone, unseen {pg} d"][tier]
             rows.append((l, sc, (tier, last), why))
     rows.sort(key=lambda x: x[2])
     total = len(rows)

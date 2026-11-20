@@ -38,6 +38,7 @@ python3 tools/ds.py --data ../dealscout-data score used-skis
 
 ## History
 
+- v2.4 (Nov 20, 2026): a listing nothing has shown for 7 days, while its site was read fine, counts as probably gone and leaves the open list (rules v1.5).
 - v2.3 (Nov 20, 2026): bug-fix batch from the Nov 19 bug hunt. Sites judges each site per search, a block pause counts blocks only and ds.py sets it, ds.py replays safely after a push race, the search editor saves any number, and phone fields no longer zoom.
 - v2.2 (Nov 19, 2026): Listings is the home page, with filters, chips and Watch, Contacted and Pass on each row.
 - v2.1 (Nov 19, 2026): page fixes plus refresh and photo-check work queues in ds.py.
