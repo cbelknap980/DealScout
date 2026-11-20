@@ -1811,8 +1811,9 @@ function renderKindFields(k, v){
   if(kd.models) h+=`<label class="f">Models you want<span class="hint">One per line, brand first, like Blizzard Brahma 88. Blank keeps every model. Named, the search keeps only these and the collector searches each one by name.</span><textarea id="e_models" rows="3" placeholder="Blizzard Brahma 88&#10;Nordica Enforcer 94">${esc((Array.isArray(v?.models)?v.models:[]).join("\n"))}</textarea></label>`;
   const defs=(kd.limits||[]).map(key=>specDef(kd,key)).filter(Boolean);
   const numsD=defs.filter(d=>d.type==="number");
-  if(numsD.length) h+=`<div class="grid2">${numsD.map(d=>{ const L=(lim[d.key] && typeof lim[d.key]==="object") ? lim[d.key] : {}, u=d.unit?` (${esc(d.unit)})`:"";
-    return `<label class="f">${esc(d.label)} from${u}<input type="number" min="0" step="any" data-lim="${esc(d.key)}:min" value="${esc(L.min??"")}"></label><label class="f">${esc(d.label)} to${u}<input type="number" min="0" step="any" data-lim="${esc(d.key)}:max" value="${esc(L.max??"")}"></label>`; }).join("")}</div>`;
+  // One row per range (from | to), so length and underfoot each read as a pair.
+  h+=numsD.map(d=>{ const L=(lim[d.key] && typeof lim[d.key]==="object") ? lim[d.key] : {}, u=d.unit?` (${esc(d.unit)})`:"";
+    return `<div class="grid2"><label class="f">${esc(d.label)} from${u}<input type="number" min="0" step="any" data-lim="${esc(d.key)}:min" value="${esc(L.min??"")}"></label><label class="f">${esc(d.label)} to${u}<input type="number" min="0" step="any" data-lim="${esc(d.key)}:max" value="${esc(L.max??"")}"></label></div>`; }).join("");
   defs.filter(d=>d.type==="choice" || d.type==="flag").forEach(d=>{ const L=Array.isArray(lim[d.key]) ? lim[d.key].map(String) : [];
     h+=`<div class="limset"><span class="limh">${esc(d.label)}<span class="hint">Leave all unticked for any</span></span><div class="srcpick">${(d.options||[]).map(([val,lab])=>`<label><input type="checkbox" data-limc="${esc(d.key)}" value="${esc(val)}"${L.includes(String(val))?" checked":""}><span>${esc(lab)}</span></label>`).join("")}</div></div>`; });
   $("e_klimits").innerHTML=h; $("e_klimits").hidden=!h;
