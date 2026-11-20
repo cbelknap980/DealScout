@@ -28,9 +28,10 @@ Commands (run `ds.py help` for the list):
   search <id> '<json>'             update a search's fields
   run '<json>'                     add a run record
   unpaste <id>                     drop a pasted link once its listing is stored
+  specs [<searchId>]               fill listing specs from titles (kinds with a title parser, e.g. skis)
   commit "<message>"               push everything recorded since the last commit
 """
-import json, math, os, re, subprocess, sys, time
+import json, math, os, re, subprocess, sys, time, unicodedata
 from datetime import datetime, timedelta, timezone
 
 OPS = ".ds-ops.jsonl"
@@ -233,10 +234,259 @@ def branded(l, words):
     return bool(re.search(pat, str(l.get("title") or ""), re.I))
 
 
+# ---------------------------------------------------------------- item kinds (v2.6, rules v1.7; mirrors kindOf() in index.html)
+# rules.json "kinds" defines each kind of item a search can be: the specs recorded on its listings, which of them
+# a search can limit (search.specLimits) and the page can filter, its default pricing, whether local pickup ranks
+# first (nearFirst) and a shipping estimate for ship-in listings with no shipping price (shipEstimate).
+KINDS = {}
+
+
+def set_kinds(rules):
+    global KINDS
+    KINDS = (rules or {}).get("kinds") or {}
+
+
+def kind_key(s):
+    k = (s or {}).get("kind")
+    if k in KINDS:
+        return k
+    c = str((s or {}).get("category") or "").lower().strip()
+    for key, v in KINDS.items():
+        for x in v.get("categories") or []:
+            if c and re.search(r"(?<![a-z0-9])" + re.escape(str(x).lower()) + r"(?![a-z0-9])", c):
+                return key
+    return "other"
+
+
+def kind_of(s):
+    return KINDS.get(kind_key(s)) or {}
+
+
+def fold(x):
+    """Lowercase with accents dropped: Völkl -> volkl."""
+    return unicodedata.normalize("NFKD", str(x or "")).encode("ascii", "ignore").decode().lower()
+
+
+def words_of(x):
+    """Words for model matching, with letters and digits counted apart: "108Ti" -> ["108", "ti"]."""
+    t = re.sub(r"(?<=[a-z])(?=\d)|(?<=\d)(?=[a-z])", " ", fold(x))
+    return re.findall(r"[a-z0-9]+", t)
+
+
+def model_match(l, s):
+    """True when the search names no models or every word of one named model is in the listing's title or specs."""
+    want = [m for m in ((s or {}).get("models") or []) if str(m).strip()]
+    if not want:
+        return True
+    sp = l.get("specs") or {}
+    have = set(words_of(l.get("title")) + words_of(sp.get("brand")) + words_of(sp.get("model")))
+    return any(all(w in have for w in words_of(m)) for m in want)
+
+
+def spec_outside(l, s):
+    """The spec limits (search.specLimits) and named models a listing is outside. Unknown specs never count."""
+    kd = kind_of(s)
+    out = []
+    sp = l.get("specs") or {}
+    lim = (s or {}).get("specLimits") or {}
+    can = set(kd.get("limits") or [])
+    for d in kd.get("specs") or []:
+        k = d.get("key")
+        L = lim.get(k)
+        if k not in can or L in (None, {}, []):
+            continue
+        if d.get("type") == "number" and isinstance(L, dict):
+            v, lo, hi = num(sp.get(k)), num(L.get("min")), num(L.get("max"))
+            if lo is not None and hi is not None and lo > hi:
+                lo, hi = hi, lo
+            if v is not None and ((lo is not None and v < lo) or (hi is not None and v > hi)):
+                out.append(k)
+        elif d.get("type") in ("choice", "flag") and isinstance(L, list):
+            v = sp.get(k)
+            if d.get("type") == "flag":
+                v = "yes" if v is True else "no"
+            if v is not None and v not in L:
+                out.append(k)
+    want = [m for m in ((s or {}).get("models") or []) if str(m).strip()]
+    if kd.get("models") and want:
+        if sp.get("model"):
+            if not model_match(l, s):
+                out.append("model")
+        elif sp.get("brand"):
+            # Model not stated: a brand none of the named models carry still rules it out.
+            bw = set(words_of(sp["brand"]))
+            if not any(bw <= set(words_of(m)) for m in want):
+                out.append("model")
+    return out
+
+
+# --- ski specs from a title written as "<Brand> <Model> <length> cm + <binding>" (vocabulary in rules kinds.skis.parse)
+LEN_RE = re.compile(r"(?<![\d.])(\d{2,3})\s*cm\b", re.I)
+ACCESSORY = re.compile(r"^(?:and\s+)?(?:\w+\s+)?(?:poles?|skins?|boots?|helmet|goggles|bag|leashes|straps|pack|package)\b", re.I)
+GENERIC_SKI = re.compile(r"\b(?:skis?|pair|vintage|used|new|nos|brand new|like new|women'?s|womens|men'?s|mens|unisex|twin[- ]tip|"
+                         r"all[- ]mountain|downhill|alpine|carving|racing|mogul|powder|freeride|freestyle|touring|backcountry|telemark|"
+                         r"cross[- ]country|xc|nordic|waxless|woodcore|wood|rock|demo|mounted|junior|kids|package|set|at)\b", re.I)
+GENERIC_BIND = re.compile(r"\b(?:bindings?|demo|adjustable|integrated|system|vintage|alpine|at|touring|tech|frame|brand new|new|matched|"
+                          r"loose|rental|older|used|old|race|racing|plates?|on)\b", re.I)
+
+
+def _word(text, w):
+    return re.search(r"(?<![a-z0-9])" + re.escape(fold(w)) + r"(?![a-z0-9])", text) is not None
+
+
+def derive_ski_specs(title, note, cfg):
+    t = re.sub(r"\s+", " ", str(title or "")).strip()
+    out = {}
+    m = next((x for x in LEN_RE.finditer(t) if 80 <= int(x.group(1)) <= 230), None)
+    if m:
+        out["lengthCm"] = int(m.group(1))
+    parts = re.split(r"\s\+\s|\s+with\s+|\s+w/\s*", t, maxsplit=1, flags=re.I)
+    ski, bind = parts[0], (parts[1] if len(parts) > 1 else "")
+    # brand: at the start (after years and words like vintage), else anywhere for names that aren't common words
+    low = fold(ski)
+    lead = low
+    while True:
+        nxt = re.sub(r"^(?:\(?(?:19|20)\d{2}(?:[/-]\d{2,4})?\)?|'\d{2}(?:/'?\d{2})?|vintage|new|used|nos|brand new|like new|women'?s|"
+                     r"womens|men'?s|mens|pair of|a pair of|demo)[\s,:-]+", "", lead)
+        if nxt == lead:
+            break
+        lead = nxt
+    names = [(fold(a), b) for a, b in (cfg.get("aliases") or {}).items()] + [(fold(b), b) for b in cfg.get("brands") or []]
+    names.sort(key=lambda x: -len(x[0]))
+    common = {fold(x) for x in cfg.get("commonWordBrands") or []}
+    brand = hit = None
+    for n, b in names:
+        if lead == n or lead.startswith(n + " ") or lead.startswith(n + ","):
+            brand, hit = b, n
+            break
+    if not brand:
+        for n, b in names:
+            if fold(b) not in common and _word(low, n):
+                brand, hit = b, n
+                break
+    if brand:
+        out["brand"] = brand
+        mdl = re.sub(r"\([^)]*\)", " ", ski)
+        mdl = mdl.split(",")[0]
+        mdl = re.sub(r"(?<![\d.])(?:19|20)\d{2}(?:[/-]\d{2,4})?(?![\d.])|'\d{2}(?:/'?\d{2})?", " ", mdl)
+        mdl = LEN_RE.sub(" ", mdl).replace("~", " ")
+        mdl = _drop_folded(mdl, hit)
+        mdl = GENERIC_SKI.sub(" ", mdl)
+        mdl = re.sub(r"\s+", " ", mdl).strip(" -:;/.'\"")
+        if re.search(r"[A-Za-z0-9]", mdl) and len(mdl) <= 40:
+            out["model"] = mdl
+    # underfoot: stated in the title or note, else the first 60-130 number in the model name
+    for src in (t, str(note or "")):
+        w = None
+        m = re.search(r"(?<![\d.])\d{2,3}\s*/\s*(\d{2,3})\s*/\s*\d{2,3}(?![\d.])", src)
+        if m and 50 <= int(m.group(1)) <= 150:
+            w = int(m.group(1))
+        if w is None:
+            m = re.search(r"(?<![\d.])(\d{2,3})(?:\s*-\s*\d{2,3})?\s*mm\s*(?:waist|underfoot)\b|\b(?:waist|underfoot)\s*(?:width\s*)?(?:of|is|:)?\s*"
+                          r"(\d{2,3})(?![\d.])|(?<![\d.])(\d{2,3})\s*(?:mm\s*)?underfoot\b|\((?:[^()]*?,\s*)?(\d{2,3})\s*mm\)", src, re.I)
+            if m:
+                v = int(next(g for g in m.groups() if g))
+                if 50 <= v <= 150:
+                    w = v
+        if w is not None:
+            out["waistMm"], out["waistFrom"] = w, "ad"
+            break
+    if "waistMm" not in out and out.get("model"):
+        sp_ = re.sub(r"(?<=[A-Za-z])(?=\d)|(?<=\d)(?=[A-Za-z])", " ", out["model"])
+        for tok in re.findall(r"(?<![\d.])\d+(?:\.\d+)?(?![\d.])", sp_):
+            if "." not in tok and 60 <= int(tok) <= 130:
+                out["waistMm"], out["waistFrom"] = int(tok), "model name"
+                break
+    # bindings (the brand's own name is left out of the title words: "Lib Tech" is not a tech binding)
+    tl = fold(_drop_folded(t, hit)) if hit else fold(t)
+    seg = re.split(r"\s\+\s|\(|,", bind)[0].strip() if bind else ""
+    seg = re.sub(r"\s+", " ", re.sub(r"(?<![\d.])(?:19|20)\d{2}(?![\d.])", " ", seg)).strip()
+    bl = fold(seg)
+    if seg and ACCESSORY.match(seg):
+        seg, bl = "", ""
+    bbrand = next((b for b in sorted(cfg.get("bindingBrands") or [], key=len, reverse=True) if _word(bl, b)), None)
+    if not bbrand:
+        bbrand = next((b for k, b in sorted((cfg.get("bindingModels") or {}).items(), key=lambda x: -len(x[0])) if _word(bl, k)), None)
+    flat = re.search(r"\b(?:flat|no bindings?|without bindings?|bindings? not included)\b", tl)
+    if flat and not bbrand:
+        out["bindings"] = "none"
+    elif seg or re.search(r"\bbindings?\b|\bmounted\b", tl):
+        out["bindings"] = "yes"
+        if bbrand:
+            out["bindingBrand"] = bbrand
+        rest = GENERIC_BIND.sub(" ", seg)
+        for b in [bbrand] if bbrand else []:
+            rest = re.sub(r"(?<![A-Za-z])" + re.escape(b) + r"(?![A-Za-z])", " ", rest, count=1, flags=re.I)
+        if re.search(r"[A-Za-z0-9]", re.sub(r"\s+", " ", rest)) and len(seg) <= 40:
+            out["bindingModel"] = re.sub(r"\s+bindings?$", "", seg, flags=re.I).strip()
+        tw = {fold(x) for x in cfg.get("titleTypeWords") or []}
+        typ = None
+        for k in ("xc", "telemark", "touring", "demo"):
+            ws = (cfg.get("bindingTypeWords") or {}).get(k) or []
+            if any(_word(bl, w) for w in ws) or any(fold(w) in tw and _word(tl, w) for w in ws):
+                typ = k
+                break
+        if typ is None and (bbrand or "bindingModel" in out or _word(tl, "alpine") or seg):
+            typ = "alpine"
+        if typ:
+            out["bindingType"] = typ
+    if re.search(r"\b(?:women'?s|womens|ladies|lady|wmns?)\b", tl) or (out.get("model") and re.search(r"(?<![A-Za-z])W(?![A-Za-z'])", out["model"])):
+        out["women"] = True
+    return out
+
+
+def _drop_folded(text, name):
+    """Remove the first occurrence of a brand name, matching accents loosely (Völkl, Volkl)."""
+    f = fold(text)
+    m = re.search(r"(?<![a-z0-9])" + re.escape(name) + r"(?![a-z0-9])", f)
+    if not m:
+        return text
+    # fold() can change length only for characters it drops; map positions by folding prefix by prefix
+    start = next(i for i in range(len(text) + 1) if len(fold(text[:i])) >= m.start())
+    end = next(i for i in range(start, len(text) + 1) if len(fold(text[:i])) >= m.end())
+    return text[:start] + " " + text[end:]
+
+
+def fill_specs(l, s):
+    """Fill the specs a kind with a title parser defines from the listing's title. A spec a collector sent (not in
+    specsAuto) is never overwritten; ones ds.py filled earlier follow the title if it changes. Returns True if changed."""
+    cfg = kind_of(s).get("parse")
+    if not cfg or kind_key(s) != "skis":
+        return False
+    before = (json.dumps(l.get("specs"), sort_keys=True), list(l.get("specsAuto") or []))
+    sp = dict(l.get("specs") or {})
+    auto = set(l.get("specsAuto") or [])
+    got = derive_ski_specs(l.get("title"), l.get("note"), cfg)
+    for k in list(auto):
+        if k not in got:
+            sp.pop(k, None)
+            auto.discard(k)
+    for k, v in got.items():
+        if k == "waistFrom":
+            continue
+        if k not in sp or k in auto:
+            sp[k] = v
+            auto.add(k)
+    if "waistMm" in auto and "waistFrom" in got:
+        sp["waistFrom"] = got["waistFrom"]
+        auto.add("waistFrom")
+    elif "waistFrom" in auto and "waistMm" not in auto:
+        auto.discard("waistFrom")
+    if sp:
+        l["specs"] = sp
+    else:
+        l.pop("specs", None)
+    if auto:
+        l["specsAuto"] = sorted(auto)
+    else:
+        l.pop("specsAuto", None)
+    return (json.dumps(l.get("specs"), sort_keys=True), list(l.get("specsAuto") or [])) != before
+
+
 # ---------------------------------------------------------------- search limits (v2.5, mirrors itemOutside() in index.html)
 def item_outside(l, s):
-    """Which of the search's item limits a listing is outside: "year" (minYear/maxYear) and "miles" (maxMiles).
-    An unknown year or miles never counts. score() adds "price" (over maxPrice) and "ship" (shipOutside, past
+    """Which of the search's item limits a listing is outside: "year" (minYear/maxYear), "miles" (maxMiles) and,
+    since v2.6, a spec key such as "lengthCm" (search.specLimits) or "model" (search.models). An unknown never counts. score() adds "price" (over maxPrice) and "ship" (shipOutside, past
     radiusMi and ships is false). Year and miles also keep a listing out of the market median; the ceiling and
     the ship rule don't, since they are about Cameron, not the market. Exclude words stay with the collector."""
     lo, hi = num(s.get("minYear")), num(s.get("maxYear"))
@@ -248,6 +498,8 @@ def item_outside(l, s):
         out.append("year")
     if m is not None and mx is not None and m > mx:
         out.append("miles")
+    # v2.6: the kind's spec limits (ski length, underfoot, bindings, binding type) and named models
+    out.extend(spec_outside(l, s))
     return out
 
 
@@ -274,19 +526,26 @@ def market_for(s, sid, listings, nums):
 
 
 def score(l, s, market, nums):
+    kd = kind_of(s)
     ref = num(l.get("refPrice")) if s.get("pricing") == "per-item" else market["value"]
     price = num(l.get("price"))
-    cost = None if price is None else price + (num(l.get("shipCost")) or 0)
-    pct = (ref - cost) / ref if (ref and cost is not None) else None
-    thr = (num(s.get("dealPct")) if num(s.get("dealPct")) is not None else nums.get("dealPctDefault", 15)) / 100
-    ceiling = num(s.get("maxPrice"))
-    under_market = pct is not None and pct >= thr
-    under_ceiling = True if ceiling is None else (cost is not None and cost <= ceiling)
     r = num(s.get("radiusMi"))
     home = miles_between(zip_coords(s.get("zip")), coords_for(l))
     if home is None and isinstance(l.get("distanceMi"), (int, float)):
         home = l["distanceMi"]
     in_radius = True if (r is None or not s.get("zip")) else (home is not None and home <= r)
+    # v2.6 shipping estimate: a ship-in listing (past radiusMi, or no location and it ships) with no shipping price
+    # is judged on price + the kind's shipEstimate until the ad shows the real cost.
+    est = num(kd.get("shipEstimate"))
+    ship_in = r is not None and bool(s.get("zip")) and (home > r if home is not None else l.get("ships") is True)
+    ship_cost = num(l.get("shipCost"))
+    ship_est = est if (est and ship_in and l.get("ships") is not False and ship_cost is None) else None
+    cost = None if price is None else price + (ship_cost if ship_cost is not None else (ship_est or 0))
+    pct = (ref - cost) / ref if (ref and cost is not None) else None
+    thr = (num(s.get("dealPct")) if num(s.get("dealPct")) is not None else nums.get("dealPctDefault", 15)) / 100
+    ceiling = num(s.get("maxPrice"))
+    under_market = pct is not None and pct >= thr
+    under_ceiling = True if ceiling is None else (cost is not None and cost <= ceiling)
     reachable = not (s.get("shipOutside") and r is not None and home is not None and home > r and l.get("ships") is False)
     brand = branded(l, nums.get("brandedWords", [])) and s.get("allowBranded") is not True
     verified = l.get("verified") is not False
@@ -319,7 +578,7 @@ def score(l, s, market, nums):
             "concern": concern, "reconfirm": reconfirm, "photoWork": photo_work,
             "needLevel": need, "branded": brand, "underMarket": under_market, "underCeiling": under_ceiling,
             "inRadius": in_radius, "homeDist": None if home is None else round(home), "fresh": fresh,
-            "checkPassed": passed, "outside": outside}
+            "checkPassed": passed, "outside": outside, "shipEst": ship_est, "nearFirst": bool(kd.get("nearFirst"))}
 
 
 # ---------------------------------------------------------------- probably gone (v2.4, mirrors probablyGone() in index.html)
@@ -371,7 +630,8 @@ def op_upsert(st, items, at):
     pasted = st.pasted()
     changed = 0
     for inc in items:
-        inc = {k: v for k, v in inc.items() if k != "status"}  # status is Cameron's (status.json)
+        inc = {k: v for k, v in inc.items() if k not in ("status", "specsAuto")}  # status is Cameron's; specsAuto is ds.py's
+        inc_specs = inc.pop("specs", None)
         lid = inc.pop("id", None)
         if not lid:
             die("upsert: every listing needs an id")
@@ -418,6 +678,24 @@ def op_upsert(st, items, at):
                 cur[k] = v
             if "lastSeen" not in inc:
                 cur["lastSeen"] = at
+        # v2.6 specs: what a collector sends wins key by key and leaves specsAuto; ds.py fills the rest from the title.
+        cur = m[lid]
+        if isinstance(inc_specs, dict):
+            sp, auto = dict(cur.get("specs") or {}), set(cur.get("specsAuto") or [])
+            for k, v in inc_specs.items():
+                if v is None:
+                    continue
+                sp[k] = v
+                auto.discard(k)
+            if inc_specs.get("waistMm") is not None and "waistFrom" not in inc_specs and "waistFrom" in auto:
+                sp.pop("waistFrom", None)
+                auto.discard("waistFrom")
+            cur["specs"] = sp
+            if auto:
+                cur["specsAuto"] = sorted(auto)
+            else:
+                cur.pop("specsAuto", None)
+        fill_specs(cur, st.searches().get(cur.get("searchId")))
         st.write(rel, m)
         if lid in pasted:
             del pasted[lid]
@@ -561,6 +839,24 @@ def op_run(st, run, at):
     return f"run {run['id']} recorded"
 
 
+def op_specs(st, sid, at):
+    """Fill specs from titles for every listing of a kind with a title parser (all such searches, or one)."""
+    ss = st.searches()
+    if sid and sid not in ss:
+        die(f"specs: no search {sid}")
+    n = 0
+    for s_id, s in ss.items():
+        if (sid and s_id != sid) or not kind_of(s).get("parse"):
+            continue
+        rel = f"listings/{s_id}.json"
+        m = st.read(rel, {}) or {}
+        changed = sum(1 for l in m.values() if fill_specs(l, s))
+        if changed:
+            st.write(rel, m)
+        n += changed
+    return f"specs filled from titles on {n} listing(s)"
+
+
 def op_unpaste(st, lid, at):
     p = st.pasted()
     if lid in p:
@@ -580,6 +876,7 @@ OPS_FN = {
     "search": lambda st, a, at: op_search(st, a["id"], a["patch"], at),
     "run": lambda st, a, at: op_run(st, a["run"], at),
     "unpaste": lambda st, a, at: op_unpaste(st, a["id"], at),
+    "specs": lambda st, a, at: op_specs(st, a.get("id"), at),
 }
 
 
@@ -704,6 +1001,13 @@ def line(l, sc=None):
         bits.append(f"{sc['homeDist']} mi")
     if sc and sc.get("pct") is not None:
         bits.append(f"{sc['pct']*100:.0f}% under" if sc["pct"] >= 0 else f"{-sc['pct']*100:.0f}% over")
+    if sc and sc.get("shipEst"):
+        bits.append(f"+{money(sc['shipEst'])} ship est.")
+    sp = l.get("specs") or {}
+    if sp:
+        w = f"{sp['waistMm']}mm" + ("(model name)" if sp.get("waistFrom") == "model name" else "") if sp.get("waistMm") else "no waist"
+        bits.append("[" + " ".join(str(x) for x in (f"{sp['lengthCm']}cm" if sp.get("lengthCm") else "no length", w,
+                                                     sp.get("bindingType") or ("flat" if sp.get("bindings") == "none" else "binding?"))) + "]")
     bits.append(f"check {ck.get('status', 'none')}{('/L' + str(ck.get('level'))) if ck.get('level') else ''}")
     if sc and sc.get("isDeal"):
         bits.append("DEAL")
@@ -744,7 +1048,10 @@ def cmd_summary(st):
         deals = [x for x in scored if x[1]["isDeal"]]
         pend = [l for l in open_ if (l.get("check") or {}).get("status") == "pending"]
         stale = [l for l, sc in scored if refresh_due(l, sc, nums)[0]]
-        print(f"\n[{sid}] {s.get('name')} · {'active' if s.get('active') else 'PAUSED'} · sources {','.join(s.get('sources') or [])}")
+        print(f"\n[{sid}] {s.get('name')} · kind {kind_key(s)} · {'active' if s.get('active') else 'PAUSED'} · sources {','.join(s.get('sources') or [])}")
+        lim = limits_text(s)
+        if lim:
+            print(f"  limits: {lim}")
         print(f"  {len(open_)} open · market {money(mk['value']) if mk['value'] else '-'} ({mk['basis']}) · "
               f"{len(deals)} deals · {len(leads)} deal-priced needing checks · {len(concerns)} with concerns (caution) · "
               f"{len(pend)} pending checks · {len(stale)} due for refresh · {len(pg)} probably gone (hidden) · "
@@ -768,6 +1075,24 @@ def cmd_summary(st):
     ops = pending_ops(st)
     if ops:
         print(f"\n{len(ops)} change(s) not yet committed")
+
+
+def limits_text(s):
+    """The search's kind limits in words, e.g. "models Blizzard Brahma 88; lengthCm 170-185; bindings yes"."""
+    bits = []
+    if s.get("models"):
+        bits.append("models " + ", ".join(str(m) for m in s["models"]))
+    for k, v in sorted((s.get("specLimits") or {}).items()):
+        if isinstance(v, dict) and (v.get("min") is not None or v.get("max") is not None):
+            bits.append(f"{k} {v.get('min') if v.get('min') is not None else 'any'}-{v.get('max') if v.get('max') is not None else 'any'}")
+        elif isinstance(v, list) and v:
+            bits.append(f"{k} {'/'.join(map(str, v))}")
+    est = num(kind_of(s).get("shipEstimate"))
+    if est:
+        bits.append(f"ship-in with no shipping price +{money(est)}")
+    if kind_of(s).get("nearFirst"):
+        bits.append("pickup first")
+    return "; ".join(bits)
 
 
 def cmd_listings(st, argv):
@@ -845,7 +1170,9 @@ def cmd_queue(st, argv):
             if not (sc["photoWork"] or sc["reconfirm"]):
                 continue
             why = "re-confirm price" if sc["reconfirm"] else (f"L{sc['needLevel']} check" + ("" if l.get("verified") is not False else ", ad not opened yet"))
-            rows.append((l, sc, (0 if sc["reconfirm"] else 1, -(sc["pct"] or 0), sc["homeDist"] if sc["homeDist"] is not None else 1e9), why))
+            # v2.6: for a kind with nearFirst (skis), listings within radiusMi come before ship-in ones.
+            far = 1 if (sc["nearFirst"] and not sc["inRadius"]) else 0
+            rows.append((l, sc, (0 if sc["reconfirm"] else 1, far, -(sc["pct"] or 0), sc["homeDist"] if sc["homeDist"] is not None else 1e9), why))
         else:
             # Order (v2.1): deal-priced leads, then listings Cameron marked, then everything else that is due,
             # oldest first. Unverified listings count as due but no longer jump the queue: shop cards the
@@ -913,6 +1240,7 @@ def main():
     argv = sys.argv[1:]
     root = find_data(argv)
     st = Store(root)
+    set_kinds(st.rules())
     if not COLLECTOR and os.path.exists(st.path(".ds-collector")):
         COLLECTOR = open(st.path(".ds-collector")).read().strip()
     if not argv or argv[0] in ("help", "-h", "--help"):
@@ -978,6 +1306,8 @@ def dispatch(st, c, a):
         record(st, "run", {"run": parse_json_arg(a[0])})
     elif c == "unpaste":
         record(st, "unpaste", {"id": a[0]})
+    elif c == "specs":
+        record(st, "specs", {"id": a[0] if a else None})
     elif c == "commit":
         commit(st, a[0] if a else "update")
     elif c == "pull":

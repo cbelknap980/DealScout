@@ -179,6 +179,12 @@ details.fold .body{display:grid;gap:10px;margin-top:12px}
 .paste textarea{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:9px 11px;width:100%;min-height:96px;font-family:var(--mono);font-size:13px}
 .quick{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .quick input{flex:1 1 320px;padding:10px 13px;font-size:16px}
+/* kind picker (v2.6) */
+.kindpick{display:flex;flex-wrap:wrap;gap:6px;align-items:center;flex-basis:100%}
+.kindpick > span{font-size:14px;color:var(--muted);margin-right:2px}
+.kindpick button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 13px;font-weight:600;font-size:14px;color:var(--head);cursor:pointer}
+.kindpick button:hover{border-color:var(--ink)}
+.kindpick button[aria-pressed="true"]{background:var(--ink);color:var(--ink-fg);border-color:var(--ink)}
 
 /* editor */
 .overlay{position:fixed;inset:0;background:color-mix(in srgb,var(--fg) 45%,transparent);display:grid;place-items:start center;overflow:auto;z-index:20;
@@ -192,6 +198,10 @@ label.f input,label.f textarea,label.f select{border:1px solid var(--line);backg
 fieldset{border:1px solid var(--line);border-radius:var(--r);padding:10px 14px 14px;margin:0}
 legend{font-family:var(--display);font-size:16px;padding:0 4px;color:var(--head)}
 .lim-note{font-size:13px;margin:0 0 10px}
+.klimits{display:grid;gap:12px;margin-top:12px}
+.limset{display:grid;gap:6px}
+.limset .limh{font-size:14px;font-weight:600}
+.limset .limh .hint{font-weight:400;color:var(--muted);font-size:12.5px;margin-left:6px}
 .srcpick{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:6px 14px}
 .srcpick label,.cbx{display:flex;gap:8px;align-items:flex-start;font-size:14.5px}
 .srcpick small{display:block;color:var(--muted);font-size:12px}
@@ -274,6 +284,8 @@ legend{font-family:var(--display);font-size:16px;padding:0 4px;color:var(--head)
 .opt input{margin:0;flex:none}
 .opt .c{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--muted)}
 .opt.zero{opacity:.5}
+.fgroup:not(.showall) .opt.extra{display:none}
+.fgroup > .linkbtn{justify-self:start;font-size:14px}
 .range{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;align-items:center;font-size:14px;color:var(--muted)}
 .range input,.fgroup select{width:100%;min-width:0}
 .fgroup .zipl{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--muted)}
@@ -405,8 +417,9 @@ body.sheet-open{overflow:hidden}
           <input id="quickText" class="field" placeholder="e.g. Blizzard Brahma 88 with bindings under $350" aria-label="Describe what to hunt for">
           <button type="submit" class="btn primary" id="quickGo">Start hunting</button>
           <button type="button" class="btn" id="newSearch">New search with all options</button>
+          <div class="kindpick" id="quickKind" role="group" aria-label="Kind of item"></div>
         </form>
-        <p class="note">Years like 2019+ or 2011-2017, a ceiling like "under $350" and words like "no parts" are picked up; the rest becomes the keywords. On its first run the collector picks the sites for the item, writes what to verify, and decides how to price it.</p>
+        <p class="note">Pick the kind of item: it decides the search's fields and filters. Years like 2019+ or 2011-2017, a ceiling like "under $350" and words like "no parts" are picked up; for skis also a length like 177cm or 170-185cm, an underfoot width like 95mm, and "with bindings" or "flat". A brand and model at the start (Blizzard Brahma 88) becomes the model the search looks for. On its first run the collector picks the sites, writes what to verify, and decides how to price it.</p>
       </section>
       <section class="block" id="summary" hidden></section>
       <section class="block paste" id="paste" hidden aria-label="Add listings by hand">
@@ -500,6 +513,7 @@ body.sheet-open{overflow:hidden}
 <div class="overlay" id="overlay" hidden>
   <form class="editor" id="editor" autocomplete="off">
     <h2 id="edTitle">New search</h2>
+    <label class="f">Kind of item<span class="hint" id="e_kindHint">Decides the fields below and the filters beside the list</span><select id="e_kind"></select></label>
     <div class="grid2">
       <label class="f">Name<input id="e_name" required placeholder="Used skis"></label>
       <label class="f">Keywords<span class="hint">What a matching title contains</span><input id="e_keywords" required placeholder="skis with bindings"></label>
@@ -524,12 +538,13 @@ body.sheet-open{overflow:hidden}
     </fieldset>
     <fieldset>
       <legend>Search limits</legend>
-      <p class="note lim-note">Listings outside these years and miles, over the ceiling, or (with the box under Where ticked) far away and not shipping leave the list and never count as deals. They stay under Status: Outside search.</p>
-      <div class="grid2">
+      <p class="note lim-note" id="e_limNote">Listings outside these years and miles, over the ceiling, or (with the box under Where ticked) far away and not shipping leave the list and never count as deals. They stay under Status: Outside search.</p>
+      <div class="grid2" id="e_vlimits">
         <label class="f">Min year<input id="e_minYear" type="number" min="1900" max="2100"></label>
         <label class="f">Max year<input id="e_maxYear" type="number" min="1900" max="2100"></label>
         <label class="f">Max miles<input id="e_maxMiles" type="number" min="0" step="any"></label>
       </div>
+      <div class="klimits" id="e_klimits" hidden></div>
     </fieldset>
     <fieldset>
       <legend>Where</legend>
@@ -598,7 +613,7 @@ const RULES = {
 };
 let RULES_DOC = null;
 const TABS = ["listings","sites","checks","how"];
-const PAGE_VERSION = "2.5";
+const PAGE_VERSION = "2.6";
 let ARCH = null, archState = "loading";
 const EMPTY = document.getElementById("empty").outerHTML;
 const $ = id => document.getElementById(id);
@@ -627,6 +642,69 @@ function median(arr){ if(!arr.length) return null; const a=[...arr].sort((x,y)=>
 const brandedRe = words => new RegExp("\\b(" + words.map(w=>String(w).replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|") + ")\\b", "i");
 let BRANDED = brandedRe(RULES.brandedWords);
 function branded(l){ if(l.titleStatus) return !/^clean$/i.test(l.titleStatus); return BRANDED.test(String(l.title||"")); }
+/* ---------- item kinds (v2.6, rules v1.7; same as ds.py kind_of(), spec_outside(), model_match()) ----------
+   A search's kind (vehicle, skis, something else) decides its fields in Edit search, its sidebar filters, the
+   item details (specs) on its listings, its default pricing, and for skis that pickup ranks first and a ship-in
+   listing with no shipping price is priced with a shipping estimate. Specs come from ds.py (read off the title)
+   and the collectors (read off the ad); the page only reads them. The live definitions are rules.json "kinds";
+   this copy is a fallback for when the rules record can't be read. */
+const KINDS_FALLBACK = {
+  vehicle:{label:"Vehicle", hint:"Cars, trucks and motorcycles: year, miles and title status", categories:["motorcycle","car","truck","suv","van","vehicle","atv","utv","snowmobile","dirt bike","scooter","rv","boat"], pricing:"median", filters:["year","miles"], limits:[], specs:[]},
+  skis:{label:"Skis", hint:"Brand and model, length, underfoot and bindings; pickup counts more", categories:["skis","ski"], pricing:"per-item", models:true, nearFirst:true, shipEstimate:40,
+    specs:[{key:"brand",label:"Brand",type:"text"},{key:"model",label:"Model",type:"text"},{key:"lengthCm",label:"Length",type:"number",unit:"cm",min:80,max:230},{key:"waistMm",label:"Underfoot",type:"number",unit:"mm",min:50,max:150},
+      {key:"bindings",label:"Bindings",type:"choice",options:[["yes","Bindings included"],["none","Flat, no bindings"]]},
+      {key:"bindingType",label:"Binding type",type:"choice",options:[["alpine","Alpine"],["demo","Demo or rental"],["touring","Touring (AT)"],["telemark","Telemark"],["xc","Cross-country"]]},
+      {key:"bindingBrand",label:"Binding brand",type:"text"},{key:"women",label:"Women's",type:"flag",options:[["yes","Women's"],["no","Men's or unisex"]]}],
+    filters:["brand","lengthCm","waistMm","bindingType","bindingBrand","women","year"], limits:["lengthCm","waistMm","bindings","bindingType"]},
+  other:{label:"Something else", hint:"Price, distance and site filters only", categories:[], pricing:"median", filters:[], limits:[], specs:[]}
+};
+let KINDS = KINDS_FALLBACK;
+const reEsc = x => String(x).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+function kindKey(s){
+  const k=s?.kind; if(k && KINDS[k]) return k;
+  const c=String(s?.category||"").toLowerCase().trim();
+  if(c) for(const [key,v] of Object.entries(KINDS)){ if((v.categories||[]).some(x=>new RegExp("(^|[^a-z0-9])"+reEsc(String(x).toLowerCase())+"($|[^a-z0-9])").test(c))) return key; }
+  return "other";
+}
+function kindOf(s){ return KINDS[kindKey(s)] || KINDS_FALLBACK.other; }
+function specDefs(kd){ return Array.isArray(kd?.specs) ? kd.specs.filter(d=>d && d.key) : []; }
+function specDef(kd, k){ return specDefs(kd).find(d=>d.key===k) || null; }
+function specsOf(l){ return (l && l.specs && typeof l.specs==="object") ? l.specs : {}; }
+function optLabel(d, v){ const o=(d?.options||[]).find(x=>String(x[0])===String(v)); return o ? String(o[1]) : String(v); }
+// A spec's value for filtering: a number, a string, or for a flag "yes"/"no"; null when not stated.
+function specVal(l, d){ const v=specsOf(l)[d.key]; if(d.type==="flag") return v===true?"yes":"no"; if(d.type==="number") return num(v); return (v==null||v==="") ? null : String(v); }
+const fold = x => String(x??"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+// Words for model matching, letters and digits apart: "108Ti" -> ["108","ti"], so "Mindbender 108" matches it.
+function wordsOf(x){ return fold(x).replace(/([a-z])(?=\d)|(\d)(?=[a-z])/g,(m,a,b)=>(a||b)+" ").match(/[a-z0-9]+/g) || []; }
+function modelMatch(l, s){
+  const want=(s?.models||[]).map(String).filter(x=>x.trim()); if(!want.length) return true;
+  const sp=specsOf(l), have=new Set([...wordsOf(l.title), ...wordsOf(sp.brand), ...wordsOf(sp.model)]);
+  return want.some(m=>wordsOf(m).every(w=>have.has(w)));
+}
+// The spec limits and named models a listing is outside. An unknown spec never counts against it.
+function specOutside(l, s){
+  const kd=kindOf(s), lim=(s && s.specLimits && typeof s.specLimits==="object") ? s.specLimits : {}, can=new Set(kd.limits||[]), out=[];
+  specDefs(kd).forEach(d=>{ const L=lim[d.key]; if(!can.has(d.key) || L==null) return;
+    if(d.type==="number" && typeof L==="object" && !Array.isArray(L)){ const v=specVal(l,d), [lo,hi]=ordered(num(L.min),num(L.max)); if(v!=null && ((lo!=null && v<lo) || (hi!=null && v>hi))) out.push(d.key); }
+    else if((d.type==="choice" || d.type==="flag") && Array.isArray(L) && L.length){ const v=specVal(l,d); if(v!=null && !L.includes(v)) out.push(d.key); } });
+  const want=(s?.models||[]).map(String).filter(x=>x.trim()), sp=specsOf(l);
+  if(kd.models && want.length){
+    if(sp.model){ if(!modelMatch(l, s)) out.push("model"); }
+    // Model not stated: a brand none of the named models carry still rules it out.
+    else if(sp.brand){ const bw=wordsOf(sp.brand); if(!want.some(m=>{ const mw=new Set(wordsOf(m)); return bw.every(w=>mw.has(w)); })) out.push("model"); } }
+  return out;
+}
+const rangeTxt = (lo, hi, u) => lo!=null && hi!=null ? (lo===hi ? `${lo}${u}` : `${lo} to ${hi}${u}`) : lo!=null ? `${lo}${u} and up` : `up to ${hi}${u}`;
+// The kind's limits in words, for the subline, the details panel and the sidebar notes.
+function kindLimitBits(s){
+  const kd=kindOf(s), lim=(s?.specLimits && typeof s.specLimits==="object") ? s.specLimits : {}, bits=[];
+  if(kd.models && (s.models||[]).length) bits.push(s.models.length<=2 ? s.models.join(", ") : `${s.models.length} named models`);
+  (kd.limits||[]).forEach(k=>{ const d=specDef(kd,k), L=lim[k]; if(!d || L==null) return;
+    if(d.type==="number"){ const [lo,hi]=ordered(num(L.min),num(L.max)); if(lo!=null || hi!=null) bits.push(`${d.label.toLowerCase()} ${rangeTxt(lo,hi,d.unit?" "+d.unit:"")}`); }
+    else if(Array.isArray(L) && L.length){ const labs=L.map(v=>optLabel(d,v)); bits.push(labs.every(x=>x.toLowerCase().includes(d.label.toLowerCase())) ? labs.join(" or ") : `${d.label.toLowerCase()}: ${labs.join(" or ").toLowerCase()}`); } });
+  return bits;
+}
+
 /* ---------- search limits (v2.5, same as ds.py item_outside() and score()) ----------
    The year range, max miles and price ceiling set in Edit search, and its ship rule (outside the radius, keep only
    listings that ship), decide what belongs in the search; the sidebar only narrows inside them. A listing outside
@@ -634,17 +712,26 @@ function branded(l){ if(l.titleStatus) return !/^clean$/i.test(l.titleStatus); r
    Year and miles also keep it out of the market median (an older bike is a different market); the ceiling and the
    ship rule are about you, not the market, so those listings still count toward it. An unknown year, miles, price
    or distance never puts a listing outside. Exclude words stay with the collector: titles mention them innocently. */
-const OUT_LABEL={year:"year", miles:"miles", price:"over ceiling", ship:"far and doesn't ship"};
+const OUT_LABEL={year:"year", miles:"miles", price:"over ceiling", ship:"far and doesn't ship", model:"not a named model"};
 function yearSpan(s){ const [lo,hi]=ordered(num(s.minYear),num(s.maxYear)); return lo!=null&&hi!=null?(lo===hi?`${lo}`:`${lo} to ${hi}`):lo!=null?`${lo} or newer`:hi!=null?`${hi} or older`:""; }
 function itemOutside(l, s){
   const out=[], [lo,hi]=ordered(num(s.minYear),num(s.maxYear)), y=num(l.year), m=num(l.miles), mx=num(s.maxMiles);
   if(y!=null && ((lo!=null && y<lo) || (hi!=null && y>hi))) out.push("year");
   if(m!=null && mx!=null && m>mx) out.push("miles");
+  out.push(...specOutside(l, s));  // v2.6: ski length, underfoot, bindings, binding type and named models
   return out;
+}
+function specOutsideText(l, s, k){
+  const kd=kindOf(s), d=specDef(kd,k);
+  if(k==="model") return `not one of your named models (${(s.models||[]).join(", ")})`;
+  if(!d) return k;
+  if(d.type==="number"){ const v=specVal(l,d), L=(s.specLimits||{})[k]||{}, [lo,hi]=ordered(num(L.min),num(L.max)), u=d.unit?" "+d.unit:"";
+    return lo!=null && v<lo ? `${d.label.toLowerCase()} ${v}${u} is under ${lo}${u}` : `${d.label.toLowerCase()} ${v}${u} is over ${hi}${u}`; }
+  return `${d.label.toLowerCase()}: ${optLabel(d, specVal(l,d)).toLowerCase()} isn't in this search`;
 }
 function outsideText(l, s, sc){
   const [lo]=ordered(num(s.minYear),num(s.maxYear));
-  return sc.outside.map(k=>k==="year"?(lo!=null && num(l.year)<lo?`${l.year} is older than ${lo}`:`${l.year} is newer than ${ordered(num(s.minYear),num(s.maxYear))[1]}`):k==="miles"?`${miles(l.miles)} is over ${miles(s.maxMiles)}`:k==="price"?`${money(sc.cost)} is over your ${money(sc.ceiling)} ceiling`:`${Math.round(sc.homeDist).toLocaleString("en-US")} mi away and doesn't ship`).join("; ");
+  return sc.outside.map(k=>!["year","miles","price","ship"].includes(k)?specOutsideText(l,s,k):k==="year"?(lo!=null && num(l.year)<lo?`${l.year} is older than ${lo}`:`${l.year} is newer than ${ordered(num(s.minYear),num(s.maxYear))[1]}`):k==="miles"?`${miles(l.miles)} is over ${miles(s.maxMiles)}`:k==="price"?`${money(sc.cost)} is over your ${money(sc.ceiling)} ceiling`:`${Math.round(sc.homeDist).toLocaleString("en-US")} mi away and doesn't ship`).join("; ");
 }
 // Hidden from the open list: outside the search's limits and not marked watching or contacted.
 function outsideHidden(l, sc){ return sc.outside.length>0 && (l.status||"new")==="new"; }
@@ -675,19 +762,24 @@ function cityAlias(city){ return city.replace(/^st\.?\s+/,"saint ").replace(/^st
 function milesBetween(a,b){ if(!a||!b) return null; const R=3958.8, rad=x=>x*Math.PI/180; const dLa=rad(b[0]-a[0]), dLo=rad(b[1]-a[1]); const h=Math.sin(dLa/2)**2+Math.cos(rad(a[0]))*Math.cos(rad(b[0]))*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
 
 function score(l, s){
-  const m = MK.get(s.id) || marketFor(s);
+  const m = MK.get(s.id) || marketFor(s), kd = kindOf(s);
   const ref = s.pricing==="per-item" ? num(l.refPrice) : m.value;
   const price = num(l.price);
-  const cost = price==null ? null : price + (num(l.shipCost)||0);
+  const r = num(s.radiusMi);
+  let homeDist = milesBetween(zipCoords(s.zip), coordsFor(l));
+  if(homeDist==null && typeof l.distanceMi==="number") homeDist = l.distanceMi;
+  const inRadius = (r==null || !s.zip) ? true : (homeDist!=null && homeDist <= r);
+  // v2.6 shipping estimate (same as ds.py score()): a ship-in listing (past the radius, or no location and it ships)
+  // with no shipping price is judged on price + the kind's shipEstimate until the ad shows the real cost.
+  const est = num(kd.shipEstimate), shipCost = num(l.shipCost);
+  const shipIn = r!=null && !!s.zip && (homeDist!=null ? homeDist > r : l.ships===true);
+  const shipEst = (est && shipIn && l.ships!==false && shipCost==null) ? est : null;
+  const cost = price==null ? null : price + (shipCost!=null ? shipCost : (shipEst||0));
   const pct = (ref && cost!=null) ? (ref - cost) / ref : null;
   const thr = (num(s.dealPct) ?? RULES.dealPctDefault) / 100;
   const ceiling = num(s.maxPrice);
   const underMarket = pct!=null && pct >= thr;
   const underCeiling = ceiling==null ? true : (cost!=null && cost <= ceiling);
-  const r = num(s.radiusMi);
-  let homeDist = milesBetween(zipCoords(s.zip), coordsFor(l));
-  if(homeDist==null && typeof l.distanceMi==="number") homeDist = l.distanceMi;
-  const inRadius = (r==null || !s.zip) ? true : (homeDist!=null && homeDist <= r);
   const reachable = !(s.shipOutside && r!=null && homeDist!=null && homeDist > r && l.ships===false);
   const brandedTitle = branded(l) && s.allowBranded!==true;
   const verified = l.verified!==false;
@@ -710,7 +802,7 @@ function score(l, s){
   const chkAt = chk.at || "";
   const settled = chk.status==="caution" && hoursSince(chkAt) <= RULES.recheckCheckDays*24 && String(l.priceChangedAt||"") <= chkAt;
   const concern = lead && settled, reconfirm = lead && checkPassed && !fresh, photoWork = lead && !checkPassed && !settled;
-  return {pct, ref, cost, isDeal, lead, concern, reconfirm, photoWork, checkFailed, confirmedAt, needLevel, brandedTitle, underMarket, underCeiling, ceiling, inRadius, radius:r, homeDist, fresh, outside};
+  return {pct, ref, cost, isDeal, lead, concern, reconfirm, photoWork, checkFailed, confirmedAt, needLevel, brandedTitle, underMarket, underCeiling, ceiling, inRadius, radius:r, homeDist, fresh, outside, shipEst, nearFirst:!!kd.nearFirst};
 }
 function openOf(s){ return listings.filter(l=>{ if(l.searchId!==s.id || l.status==="passed" || l.gone) return false; const sc=score(l,s); return probablyGone(l,s,sc)==null && !outsideHidden(l,sc); }); }
 
@@ -866,6 +958,8 @@ function applyRulesDoc(doc){
   ["dealPctDefault","exceptionalPct","exceptionalPrivatePct","priceFreshHours","connectedHours","recheckCheckDays","probablyGoneDays"].forEach(k=>{ const v=num(n[k]); if(v!=null) RULES[k]=v; });
   if(Array.isArray(n.defaultMustHave) && n.defaultMustHave.length) RULES.defaultMustHave = n.defaultMustHave.map(String);
   if(Array.isArray(n.brandedWords) && n.brandedWords.length){ try{ BRANDED = brandedRe(n.brandedWords); RULES.brandedWords = n.brandedWords.map(String); }catch(e){} }
+  const k = RULES_DOC?.kinds;
+  KINDS = (k && typeof k==="object" && Object.values(k).every(v=>v && typeof v==="object")) ? k : KINDS_FALLBACK;
 }
 function renderRules(){
   document.querySelectorAll("[data-rule]").forEach(el=>{ const v=RULES[el.dataset.rule]; if(v!=null) el.textContent=v; });
@@ -922,14 +1016,33 @@ function stOf(l, pg, sc){ return (l.gone || pg!=null) ? "gone" : (sc && outsideH
 function homeZip(){ const s=isAll()?scopeSearches()[0]:current(); return s?.zip||""; }
 function effZip(){ return F.zip || homeZip(); }
 
-function defaultF(){ return {q:"", deal:[], pmin:null, pmax:null, ymin:null, ymax:null, mmax:null, dist:"any", zip:"", site:[], status:[...OPEN_ST], drop:false, sort:"deal"}; }
+function defaultF(){ return {q:"", deal:[], pmin:null, pmax:null, ymin:null, ymax:null, mmax:null, dist:"any", zip:"", site:[], status:[...OPEN_ST], drop:false, sort:"deal", sp:{}, get:[]}; }
+// Spec filters (v2.6): F.sp[key] is a list of picked values ("~" = not stated) or a range {min, max, nounk}.
+// In the page address a list is xl.<key>=a,b and a range xr.<key>=min-max, with "!" at the end to leave out unknowns.
+const GETS=[["near","Pickup near you"],["ships","Ships to you"],["far","Far, no shipping shown"]];
+const GLABEL=Object.fromEntries(GETS);
+function sanitizeSp(f){
+  const out={}, okKey=k=>/^[A-Za-z][A-Za-z0-9]{0,30}$/.test(k);
+  const o=(f.sp && typeof f.sp==="object") ? f.sp : {};
+  Object.entries(o).forEach(([k,v])=>{ if(!okKey(k)) return;
+    if(Array.isArray(v)){ const a=[...new Set(v.map(x=>String(x).slice(0,60)).filter(Boolean))].slice(0,60); if(a.length) out[k]=a; }
+    else if(v && typeof v==="object"){ const r={min:num(v.min), max:num(v.max), nounk:v.nounk===true}; if(r.min!=null || r.max!=null || r.nounk) out[k]=r; } });
+  Object.keys(f).forEach(key=>{ const m=key.match(/^x([lr])\.(\w+)$/); if(!m || !okKey(m[2])) return; const v=String(f[key]);
+    if(m[1]==="l"){ const a=v.split(",").map(x=>x.trim()).filter(Boolean).slice(0,60); if(a.length) out[m[2]]=a; }
+    else { const r=v.match(/^(\d*\.?\d*)-(\d*\.?\d*)(!?)$/); if(r){ const x={min:num(r[1]), max:num(r[2]), nounk:r[3]==="!"}; if(x.min!=null || x.max!=null || x.nounk) out[m[2]]=x; } } });
+  return out;
+}
+function fList(name){ if(name.startsWith("sp:")){ const v=F.sp[name.slice(3)]; return Array.isArray(v)?v:[]; } return F[name]; }
+function setFList(name, arr){ if(name.startsWith("sp:")){ const k=name.slice(3); if(arr.length) F.sp[k]=arr; else delete F.sp[k]; } else F[name]=arr; }
+function spRange(k){ const v=F.sp[k]; return (v && !Array.isArray(v)) ? v : {min:null, max:null, nounk:false}; }
+function setSpRange(k, r){ if(r.min==null && r.max==null && !r.nounk) delete F.sp[k]; else F.sp[k]=r; }
 function sanitizeF(f){
   const list=(v,ok)=>(Array.isArray(v)?v:String(v||"").split(",")).map(x=>String(x).trim()).filter(x=>x && (!ok || ok.includes(x)));
   const d=defaultF();
   return {q:String(f.q||"").slice(0,80), deal:list(f.deal,Object.keys(TIER)), pmin:num(f.pmin), pmax:num(f.pmax), ymin:num(f.ymin), ymax:num(f.ymax), mmax:num(f.mmax),
     dist:/^(any|near|\d{1,5})$/.test(String(f.dist))?String(f.dist):"any", zip:/^\d{5}$/.test(String(f.zip||""))?String(f.zip):"",
     site:list(f.site), status:f.status==null?d.status:(f.status==="any"?[]:list(f.status,STATUSES.map(x=>x[0]))), drop:f.drop===true||f.drop==="1",
-    sort:SORTS.some(x=>x[0]===f.sort)?f.sort:"deal"};
+    sort:SORTS.some(x=>x[0]===f.sort)?f.sort:"deal", sp:sanitizeSp(f), get:list(f.get,GETS.map(x=>x[0]))};
 }
 function loadF(){
   if(F && Ffor===selected) return;
@@ -952,6 +1065,8 @@ function writeHash(){
   if(F.status.join(",")!==d.status.join(",")) p.set("status",F.status.length?F.status.join(","):"any");
   if(F.drop) p.set("drop","1");
   if(F.sort!=="deal") p.set("sort",F.sort);
+  if(F.get.length) p.set("get",F.get.join(","));
+  Object.entries(F.sp).forEach(([k,v])=>{ if(Array.isArray(v)) p.set("xl."+k, v.join(",")); else p.set("xr."+k, `${v.min??""}-${v.max??""}${v.nounk?"!":""}`); });
   const h="#listings"+(p.toString()?"?"+p.toString():"");
   try{ if(location.hash!==h) history.replaceState(null,"",h); }catch(e){}
 }
@@ -969,7 +1084,9 @@ function scopeRows(){
     const s=searchOf(l), sc=score(l,s), pg=probablyGone(l,s,sc);
     let d=milesBetween(origin,coordsFor(l));
     if(d==null && zip===s.zip && typeof l.distanceMi==="number") d=l.distanceMi;
-    return {l, s, sc, d, ds:dstate(sc), st:stOf(l,pg,sc), pg, bid:isBid(l), drop:dropOf(l)};
+    // Getting it (v2.6): pickup inside the search's radius, ships to you, or far with no shipping shown.
+    const get=(sc.radius==null || !s.zip) ? null : sc.inRadius ? "near" : (l.ships===true || num(l.shipCost)!=null) ? "ships" : "far";
+    return {l, s, sc, d, ds:dstate(sc), st:stOf(l,pg,sc), pg, bid:isBid(l), drop:dropOf(l), kd:kindOf(s), get};
   });
 }
 // A range typed backwards ("2015 to 2009") is read the right way round.
@@ -986,14 +1103,22 @@ function passes(r, skip){
   if(skip!=="site" && F.site.length && !F.site.includes(l.source)) return false;
   if(skip!=="status" && F.status.length && !F.status.includes(r.st)) return false;
   if(skip!=="drop" && F.drop && !r.drop) return false;
+  if(skip!=="get" && F.get.length && r.get!=null && !F.get.includes(r.get)) return false;
+  for(const k in F.sp){ if(skip==="sp:"+k) continue; const d=specDef(r.kd,k), v=F.sp[k]; if(!d) continue;
+    const x=specVal(l,d);
+    if(Array.isArray(v)){ if(v.length && !v.includes(x==null?"~":String(x))) return false; }
+    else if(x==null){ if(v.nounk) return false; }
+    else { const [lo,hi]=ordered(v.min,v.max); if((lo!=null && x<lo) || (hi!=null && x>hi)) return false; } }
   return true;
 }
 function tally(rows, skip, key){ const m=new Map(); rows.forEach(r=>{ if(passes(r,skip)){ const k=key(r); m.set(k,(m.get(k)||0)+1); } }); return m; }
 const pctOf=r=>r.sc.pct ?? -9;
 // Best deal first: deal state before percent, so branded titles, failed checks and auction bids can't top the list.
 function tierOf(r){ if(r.ds==="deal") return 0; if(r.bid) return 4; return TIER[r.ds]; }
+// Pickup first (v2.6): for a kind with nearFirst (skis), listings inside the radius come before ship-in ones of the same standing.
+const farOf=r=>(r.sc.nearFirst && !r.sc.inRadius) ? 1 : 0;
 const SORTFN={
-  deal:(a,b)=>tierOf(a)-tierOf(b) || pctOf(b)-pctOf(a),
+  deal:(a,b)=>tierOf(a)-tierOf(b) || farOf(a)-farOf(b) || pctOf(b)-pctOf(a),
   price:(a,b)=>(a.bid?1:0)-(b.bid?1:0) || (num(a.l.price)??1e12)-(num(b.l.price)??1e12),
   drop:(a,b)=>b.drop-a.drop || pctOf(b)-pctOf(a),
   new:(a,b)=>String(b.l.foundAt||"").localeCompare(String(a.l.foundAt||"")),
@@ -1009,8 +1134,29 @@ function optList(name, opts, counts, picked){
   return opts.map(([v,label])=>{ const c=counts.get(v)||0, on=picked.includes(v);
     return `<label class="opt${c||on?"":" zero"}"><input type="checkbox" data-f="${name}" value="${esc(v)}"${on?" checked":""}><span>${esc(label)}</span><span class="c" data-c="${esc(name+":"+v)}">${c}</span></label>`; }).join("");
 }
+// The scope's kind: the search's own, or for All searches the kind they share (else no spec filters).
+function scopeKind(){ const ss=scopeSearches(); if(!ss.length) return KINDS_FALLBACK.other; const k=kindKey(ss[0]); return ss.every(x=>kindKey(x)===k) ? kindOf(ss[0]) : KINDS_FALLBACK.other; }
+function textOpts(d, rows){
+  const m=new Map(); rows.forEach(r=>{ const v=specVal(r.l,d); if(v!=null) m.set(v,(m.get(v)||0)+1); });
+  return [...m.entries()].sort((a,b)=>b[1]-a[1] || a[0].localeCompare(b[0])).map(([v])=>[v,v]);
+}
+function specGroup(d, rows, limNote, s){
+  const k=d.key, live=rows.filter(r=>!r.sc.outside.length && r.st!=="gone");
+  const L=s && !isAll() ? (s.specLimits||{})[k] : null;
+  const lim=L==null ? "" : d.type==="number" ? (()=>{ const [lo,hi]=ordered(num(L.min),num(L.max)); return lo==null&&hi==null ? "" : rangeTxt(lo,hi,d.unit?" "+d.unit:""); })() : Array.isArray(L) && L.length ? L.map(v=>optLabel(d,v)).join(" or ") : "";
+  if(d.type==="number"){
+    const vals=live.map(r=>specVal(r.l,d)).filter(v=>v!=null), lo=vals.length?Math.min(...vals):null, hi=vals.length?Math.max(...vals):null, u=d.unit?` (${esc(d.unit)})`:"";
+    return `<div class="fgroup" data-g="sp:${esc(k)}"><h3>${esc(d.label)}${u}</h3><div class="range"><input class="field num" inputmode="numeric" data-spn="${esc(k)}:min" aria-label="${esc(d.label)} from" placeholder="${lo??"From"}"><span>to</span><input class="field num" inputmode="numeric" data-spn="${esc(k)}:max" aria-label="${esc(d.label)} to" placeholder="${hi??"To"}"></div>
+      <label class="opt"><input type="checkbox" data-spu="${esc(k)}" checked><span>Include ones with no ${esc(d.label.toLowerCase())} listed</span><span class="c" data-cu="${esc(k)}">0</span></label>${limNote(lim)}</div>`;
+  }
+  const opts=d.type==="text" ? textOpts(d, live) : (d.options||[]).map(([v,lab])=>[String(v),String(lab)]);
+  if(d.type!=="flag") opts.push(["~","Not stated"]);
+  const picked=fList("sp:"+k), many=d.type==="text" && opts.length>9;
+  const html=optList("sp:"+k, opts, new Map(), picked).split('<label class="opt').map((x,i)=>i===0?x:'<label class="opt'+(many && i>8 && !picked.includes(opts[i-1][0]) && opts[i-1][0]!=="~" ? " extra" : "")+x).join("");
+  return `<div class="fgroup" data-g="sp:${esc(k)}"><h3>${esc(d.label)}</h3>${html}${many?`<button type="button" class="linkbtn" data-act="more">Show all ${opts.length-1}</button>`:""}${limNote(lim)}</div>`;
+}
 function buildPanel(rows){
-  const all=isAll(), s=current();
+  const all=isAll(), s=current(), kd=scopeKind();
   // Placeholders show the spread of what's in the search; the line under a range says the search's own limit,
   // which the sidebar can only narrow (listings outside it are under Status: Outside search).
   const inRows=rows.filter(r=>!r.sc.outside.length);
@@ -1023,8 +1169,9 @@ function buildPanel(rows){
     <div class="fp-head"><span>Filters</span><button type="button" class="btn" data-act="close">Done</button></div>
     <div class="fgroup"><h3>Deal state</h3>${optList("deal",DSTATE,new Map(),F.deal)}</div>
     <div class="fgroup"><h3>Price</h3><div class="range"><input class="field num" inputmode="numeric" data-n="pmin" aria-label="Lowest price" placeholder="${pr?fm(pr[0]):"Min"}"><span>to</span><input class="field num" inputmode="numeric" data-n="pmax" aria-label="Highest price" placeholder="${pr?fm(pr[1]):"Max"}"></div>${limNote(s?.maxPrice?`ceiling ${fm(s.maxPrice)}`:"")}</div>
-    ${fieldOn.year?`<div class="fgroup"><h3>Year</h3><div class="range"><input class="field num" inputmode="numeric" maxlength="4" data-n="ymin" aria-label="Oldest year" placeholder="${yr?yr[0]:"From"}"><span>to</span><input class="field num" inputmode="numeric" maxlength="4" data-n="ymax" aria-label="Newest year" placeholder="${yr?yr[1]:"To"}"></div>${limNote(s?yearSpan(s):"")}</div>`:""}
-    ${fieldOn.miles?`<div class="fgroup"><h3>Miles</h3><div class="range"><span>Up to</span><input class="field num" inputmode="numeric" data-n="mmax" aria-label="Most miles" placeholder="${mi?Math.round(mi[1]).toLocaleString("en-US"):"Any"}" style="grid-column:2/4"></div>${limNote(s?.maxMiles?`up to ${miles(s.maxMiles)}`:"")}</div>`:""}
+    ${kindGroups(kd, rows, limNote, s, ()=>fieldOn.year?`<div class="fgroup"><h3>Year</h3><div class="range"><input class="field num" inputmode="numeric" maxlength="4" data-n="ymin" aria-label="Oldest year" placeholder="${yr?yr[0]:"From"}"><span>to</span><input class="field num" inputmode="numeric" maxlength="4" data-n="ymax" aria-label="Newest year" placeholder="${yr?yr[1]:"To"}"></div>${limNote(s?yearSpan(s):"")}</div>`:"",
+      ()=>fieldOn.miles?`<div class="fgroup"><h3>Miles</h3><div class="range"><span>Up to</span><input class="field num" inputmode="numeric" data-n="mmax" aria-label="Most miles" placeholder="${mi?Math.round(mi[1]).toLocaleString("en-US"):"Any"}" style="grid-column:2/4"></div>${limNote(s?.maxMiles?`up to ${miles(s.maxMiles)}`:"")}</div>`:"")}
+    ${rows.some(r=>r.get!=null)?`<div class="fgroup"><h3>Getting it</h3>${optList("get",GETS.map(([v,t])=>[v, v==="near"&&!all&&s?.radiusMi?`${t} (within ${Number(s.radiusMi).toLocaleString("en-US")} mi)`:t]),new Map(),F.get)}</div>`:""}
     <div class="fgroup"><h3>Distance</h3><select class="field" data-s="dist" aria-label="Distance"><option value="any">Any distance</option><option value="near">${esc(nearTxt)}</option>${RADII.map(r=>`<option value="${r}">Within ${r.toLocaleString("en-US")} mi</option>`).join("")}</select>
       <label class="zipl">of ZIP <input class="field zip num" data-z="zip" inputmode="numeric" maxlength="5" autocomplete="postal-code" aria-label="ZIP code to measure from" placeholder="${esc(homeZip()||"ZIP")}"></label></div>
     <div class="fgroup"><h3>Site</h3>${optList("site",siteIds.map(id=>[id,site(id).name]),new Map(),F.site)}</div>
@@ -1032,9 +1179,19 @@ function buildPanel(rows){
     <div class="fgroup"><h3>Price changes</h3><label class="opt"><input type="checkbox" data-b="drop"${F.drop?" checked":""}><span>Price dropped</span><span class="c" data-c="drop:1">0</span></label></div>
     <div class="fp-foot"><button type="button" class="btn" data-act="clear">Clear all</button><button type="button" class="btn primary" data-act="close" id="fshow">Show listings</button></div>`;
 }
+// The kind's own groups in its filters order; year and miles sit where the kind lists them (vehicles: both).
+function kindGroups(kd, rows, limNote, s, yearHtml, milesHtml){
+  const f=Array.isArray(kd.filters) ? kd.filters : [];
+  const order=f.length ? [...f] : ["year","miles"];
+  if(!order.includes("year")) order.push("year");
+  if(!order.includes("miles")) order.push("miles");
+  return order.map(k=>k==="year" ? yearHtml() : k==="miles" ? milesHtml() : (specDef(kd,k) ? specGroup(specDef(kd,k), rows, limNote, s) : "")).join("");
+}
 function syncPanel(){
   const p=$("fpanel"), act=document.activeElement;
-  p.querySelectorAll("input[data-f]").forEach(i=>{ i.checked=F[i.dataset.f].includes(i.value); });
+  p.querySelectorAll("input[data-f]").forEach(i=>{ i.checked=fList(i.dataset.f).includes(i.value); });
+  p.querySelectorAll("input[data-spn]").forEach(i=>{ if(i===act) return; const [k,end]=i.dataset.spn.split(":"), v=spRange(k)[end]; i.value=v==null?"":String(v); });
+  p.querySelectorAll("input[data-spu]").forEach(i=>{ i.checked=!spRange(i.dataset.spu).nounk; });
   p.querySelectorAll("input[data-n]").forEach(i=>{ if(i===act) return; const v=F[i.dataset.n]; i.value=v==null?"":(i.dataset.n.startsWith("y")?String(v):Number(v).toLocaleString("en-US")); });
   const ds=p.querySelector("select[data-s=dist]"); if(ds){ if(![...ds.options].some(o=>o.value===F.dist)) F.dist="any"; ds.value=F.dist; }
   const z=p.querySelector("input[data-z]"); if(z && z!==act){ z.value=F.zip; z.removeAttribute("aria-invalid"); }
@@ -1047,6 +1204,12 @@ function updateCounts(rows){
   set("site", tally(rows,"site",r=>r.l.source));
   set("status", tally(rows,"status",r=>r.st));
   set("drop", tally(rows,"drop",r=>r.drop?"1":"0"));
+  set("get", tally(rows,"get",r=>r.get||""));
+  const kd=scopeKind();
+  specDefs(kd).filter(d=>(kd.filters||[]).includes(d.key)).forEach(d=>{
+    if(d.type==="number"){ const el=p.querySelector(`[data-cu="${d.key}"]`); if(el) el.textContent=rows.filter(r=>passes(r,"sp:"+d.key) && specVal(r.l,d)==null).length; }
+    else set("sp:"+d.key, tally(rows,"sp:"+d.key,r=>{ const x=specVal(r.l,d); return x==null?"~":String(x); }));
+  });
 }
 
 /* --- applied filters as removable chips; the count says what the list shows --- */
@@ -1063,6 +1226,12 @@ function chipList(){
   if(F.site.length) c.push([F.site.length<=2?F.site.map(id=>site(id).name).join(", "):`${F.site.length} sites`, ()=>{ F.site=[]; }, "site"]);
   if(F.status.join(",")!==d.status.join(",")) c.push([F.status.length?F.status.map(v=>SLABEL[v]).join(", "):"Any status", ()=>{ F.status=[...OPEN_ST]; }, "status"]);
   if(F.drop) c.push(["Price dropped", ()=>{ F.drop=false; }, "drop"]);
+  if(F.get.length) c.push([F.get.map(g=>GLABEL[g]).join(", "), ()=>{ F.get=[]; }, "get"]);
+  const kd=scopeKind();
+  Object.entries(F.sp).forEach(([k,v])=>{ const d=specDef(kd,k); if(!d) return; let label;
+    if(Array.isArray(v)){ const lab=x=>x==="~" ? `${d.label} not stated` : optLabel(d,x); label=v.length<=2 ? v.map(lab).join(", ") : `${v.length} ${d.label.toLowerCase()}${/s$/i.test(d.label)?"":"s"}`; }
+    else { const [lo,hi]=ordered(v.min,v.max); label=(lo==null && hi==null) ? `${d.label} listed` : `${d.label} ${rangeTxt(lo,hi,d.unit?" "+d.unit:"")}`; }
+    c.push([label, ()=>{ delete F.sp[k]; }, "sp:"+k]); });
   return c;
 }
 let CHIPS=[];
@@ -1084,7 +1253,7 @@ function dealCard(r){
   const where=[isAll()?s.name:"", site(l.source).name, l.location, sc.inRadius&&sc.homeDist!=null?"near you":"", dist].filter(Boolean).join(" · ");
   return `<a class="dcard${u&&/^https:\/\//.test(u)?"":" noimg"}" href="${esc(l.url||"#")}" target="_blank" rel="noopener" title="${esc(l.check?.summary?"Checked: "+l.check.summary:"")}">
     ${u&&/^https:\/\//.test(u)?`<img src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.classList.add('noimg');this.remove()">`:""}
-    <div class="dbody"><div class="dtop"><span class="amt">${money(l.price)}</span><span class="pill deal">${Math.round(sc.pct*100)}% under</span>${num(l.shipCost)?`<span class="note">+ ${money(l.shipCost)} ship</span>`:""}</div>
+    <div class="dbody"><div class="dtop"><span class="amt">${money(l.price)}</span><span class="pill deal">${Math.round(sc.pct*100)}% under</span>${num(l.shipCost)?`<span class="note">+ ${money(l.shipCost)} ship</span>`:sc.shipEst?`<span class="note">+ ${money(sc.shipEst)} ship (est.)</span>`:""}</div>
     <h3>${esc(l.title)}</h3><div class="note">${esc(where)}${s.pricing==="per-item"&&l.refPrice?` · fair used ${money(l.refPrice)}`:""}</div>
     <div class="note">Price confirmed on the ad ${esc(ago(sc.confirmedAt))}</div></div></a>`;
 }
@@ -1092,7 +1261,7 @@ function renderStrip(rows){
   const el=$("dealStrip");
   if(F.deal.length && !F.deal.includes("deal")){ el.hidden=true; return; }
   const pool=rows.filter(r=>r.st!=="gone" && passes(r,"deal"));
-  const deals=pool.filter(r=>r.ds==="deal").sort((a,b)=>pctOf(b)-pctOf(a));
+  const deals=pool.filter(r=>r.ds==="deal").sort((a,b)=>farOf(a)-farOf(b) || pctOf(b)-pctOf(a));
   const checking=pool.filter(r=>r.ds==="checking").length;
   const filtered=CHIPS.some(c=>c[2]!=="deal");
   el.hidden=false;
@@ -1131,14 +1300,18 @@ function rowHtml({l,s,sc,d,ds,st,pg,bid}){
   const seenAt=[l.lastChecked,l.lastSeen].filter(Boolean).sort().pop();
   const freshTxt=l.gone?"":pg!=null?`<span class="away">not seen in ${pg} days</span>`:l.verified===false?`<span class="away">price not confirmed on the ad yet</span>`:seenAt?`<span>price checked ${esc(ago(seenAt))}</span>`:"";
   const ref=l.refPrice?`<span>fair used ${money(l.refPrice)}${l.refBasis?` (${esc(l.refBasis)})`:""}</span>`:"";
-  const ship=num(l.shipCost)?`<span>+ ${money(l.shipCost)} shipping</span>`:(l.ships===true?`<span>ships</span>`:"");
+  const ship=num(l.shipCost)?`<span>+ ${money(l.shipCost)} shipping</span>`:sc.shipEst?`<span title="The ad shows no shipping price, so it's priced with the ${money(sc.shipEst)} estimate until it does">+ ${money(sc.shipEst)} shipping (estimate)</span>`:(l.ships===true?`<span>ships</span>`:"");
+  // v2.6 specs the title doesn't already say: underfoot (≈ when read off the model name) and the binding type.
+  const kd=kindOf(s), sp=specsOf(l), bt=specDef(kd,"bindingType");
+  const specTxt=!specDefs(kd).length?"":(sp.waistMm!=null?`<span title="${sp.waistFrom==="model name"?"Read off the model name; the collector confirms it from the ad or the maker's spec":sp.waistFrom==="spec"?"The maker's published width for this model":"From the ad"}">${sp.waistFrom==="model name"?"≈":""}${esc(sp.waistMm)} mm underfoot</span>`:"")
+    + (sp.bindingType&&bt?`<span>${esc(optLabel(bt,sp.bindingType))} bindings</span>`:sp.bindings==="none"?`<span>flat, no bindings</span>`:"");
   const lead=off?"":ds==="deal"?'<span class="flag">Deal · </span>':ds==="concern"?'<span class="away">Has concerns · </span>':ds==="checking"?'<span class="away">Being checked · </span>':ds==="failed"?'<span style="color:var(--bad);font-weight:600">Likely not legit · </span>':outTxt?'<span class="away">Outside search · </span>':"";
   const acts=`<div class="acts" role="group" aria-label="Mark this listing">${[["watching","Watch","Watching"],["contacted","Contacted","Contacted"],["passed","Pass","Passed"]].map(([v,t,on])=>`<button type="button" class="act${v==="passed"?" pass":""}" data-id="${esc(l.id)}" data-v="${v}" aria-pressed="${l.status===v}"${canWrite?"":" disabled"}>${l.status===v?on:t}</button>`).join("")}</div>`;
   return `<article class="row${(st==="passed"||st==="outside"||off)?" passed":""}">
     <div class="price"><span class="amt">${money(l.price)}</span>${wasHtml}${off?"":pill}</div>
     <div class="title">${lead}${l.url?`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.title)}</a>`:esc(l.title)}</div>
     ${acts}
-    <div class="meta">${photos}${unv}${outPill}${tb}${ckLabel}${isAll()?`<span>${esc(s.name)}</span>`:""}<span>${esc(site(l.source).name)}</span>${l.miles?`<span class="num">${miles(l.miles)}</span>`:""}<span>${esc(l.location||"")}</span>${distTxt}${ship}<span>${esc(l.seller||"")}${l.sellerType?` (${esc(l.sellerType)})`:""}</span>${ref}${change}<span>found ${esc(ago(l.foundAt))}</span>${freshTxt}${outNote}${radiusNote}${lnote}${ckNote}</div>
+    <div class="meta">${photos}${unv}${outPill}${tb}${ckLabel}${isAll()?`<span>${esc(s.name)}</span>`:""}<span>${esc(site(l.source).name)}</span>${l.miles?`<span class="num">${miles(l.miles)}</span>`:""}<span>${esc(l.location||"")}</span>${distTxt}${specTxt}${ship}<span>${esc(l.seller||"")}${l.sellerType?` (${esc(l.sellerType)})`:""}</span>${ref}${change}<span>found ${esc(ago(l.foundAt))}</span>${freshTxt}${outNote}${radiusNote}${lnote}${ckNote}</div>
   </article>`;
 }
 
@@ -1164,13 +1337,16 @@ function renderSummary(s){
   const el=$("summary");
   if(!s || isAll() || openPanel!=="details"){ el.hidden=true; return; }
   const m=MK.get(s.id)||marketFor(s), thr=num(s.dealPct)??RULES.dealPctDefault, run=lastRunFor(s.id);
-  const yrs=(s.minYear||s.maxYear)?`${s.minYear||"any"} to ${s.maxYear||"any"}`:"any";
+  const yrs=(s.minYear||s.maxYear)?`${s.minYear||"any"} to ${s.maxYear||"any"}`:"any", kd=kindOf(s), kb=kindLimitBits(s);
+  const yearsRow=(!specDefs(kd).length || s.minYear || s.maxYear || s.maxMiles) ? `<dt>Years / miles</dt><dd>${yrs} / ${s.maxMiles?miles(s.maxMiles):"any"}</dd>` : "";
+  const kindRow=`<dt>Kind</dt><dd>${esc(kd.label||"Something else")}</dd>${specDefs(kd).length?`<dt>Limits</dt><dd>${kb.length?esc(kb.join("; ")):"none: every length, width and binding"}</dd>`:""}`;
+  const shipTxt=kd.shipEstimate?` (${money(kd.shipEstimate)} estimated when the ad doesn't show it)`:"";
   const rule = s.pricing==="per-item" ? `${thr}% under each model's fair used price` : m.value ? `${thr}% under ${money(m.value)} (${esc(m.basis)}), so ${money(m.value*(1-thr/100))} or less` : `${thr}% under the median, once listings come in`;
   el.hidden=false;
   el.innerHTML=`<div class="block-head"><div><span class="section-label">${esc(s.category||"Search")}${s.active===false?" · paused":""}</span><h2 class="block-title">${esc(s.name)}</h2></div>${canWrite?`<button class="btn" id="editSearch" type="button">Edit search</button>`:""}</div>
     <div class="cols">
-      <div class="col"><dl class="terms"><dt>Keywords</dt><dd>${esc(s.keywords)}${s.exclude?`<span class="muted"> · not ${esc(s.exclude)}</span>`:""}</dd><dt>Deal rule</dt><dd>${rule}</dd><dt>Ceiling</dt><dd>${s.maxPrice?money(s.maxPrice):"none"}</dd><dt>Years / miles</dt><dd>${yrs} / ${s.maxMiles?miles(s.maxMiles):"any"}</dd></dl></div>
-      <div class="col"><dl class="terms"><dt>Area</dt><dd>${s.zip?`within ${esc(s.radiusMi??"any")} mi of ${esc(s.zip)} counts as near you${s.shipOutside?"; farther only if it ships, priced with shipping":""}`:"nationwide"}</dd><dt>Sites</dt><dd>${(s.sources||[]).map(id=>esc(site(id).name)).join(", ")||"picked on the first run"}</dd><dt>Last run</dt><dd>${run?`${esc(ago(run.at))}: ${esc(run.note||"")}`:"not yet"}</dd></dl></div>
+      <div class="col"><dl class="terms"><dt>Keywords</dt><dd>${esc(s.keywords)}${s.exclude?`<span class="muted"> · not ${esc(s.exclude)}</span>`:""}</dd><dt>Deal rule</dt><dd>${rule}</dd><dt>Ceiling</dt><dd>${s.maxPrice?money(s.maxPrice):"none"}</dd>${kindRow}${yearsRow}</dl></div>
+      <div class="col"><dl class="terms"><dt>Area</dt><dd>${s.zip?`within ${esc(s.radiusMi??"any")} mi of ${esc(s.zip)} counts as near you${s.shipOutside?`; farther only if it ships, priced with shipping${shipTxt}`:""}${kd.nearFirst?"; pickup listings rank first":""}`:"nationwide"}</dd><dt>Sites</dt><dd>${(s.sources||[]).map(id=>esc(site(id).name)).join(", ")||"picked on the first run"}</dd><dt>Last run</dt><dd>${run?`${esc(ago(run.at))}: ${esc(run.note||"")}`:"not yet"}</dd></dl></div>
     </div>`;
   const b=$("editSearch"); if(b) b.onclick=()=>openEditor(s);
 }
@@ -1180,7 +1356,8 @@ function renderSubline(){
   if(isAll()){ el.innerHTML=""; el.hidden=true; return; }
   el.hidden=false;
   const m=MK.get(s.id)||marketFor(s), thr=num(s.dealPct)??RULES.dealPctDefault, run=lastRunFor(s.id);
-  const one=`${s.pricing==="per-item"?`${thr}% under fair used`:m.value?`${thr}% under ${money(m.value)}`:`${thr}% under the median, once listings come in`}${s.maxPrice?` · under ${money(s.maxPrice)}`:""}${yearSpan(s)?` · ${yearSpan(s)}`:""}${num(s.maxMiles)!=null?` · up to ${miles(s.maxMiles)}`:""}${s.zip?` · near you within ${esc(s.radiusMi??"any")} mi`:""}${run?` · last run ${esc(ago(run.at))}`:""}`;
+  const kb=kindLimitBits(s).map(x=>` · ${esc(x)}`).join(""), kd=kindOf(s);
+  const one=`${s.pricing==="per-item"?`${thr}% under fair used`:m.value?`${thr}% under ${money(m.value)}`:`${thr}% under the median, once listings come in`}${s.maxPrice?` · under ${money(s.maxPrice)}`:""}${yearSpan(s)?` · ${yearSpan(s)}`:""}${num(s.maxMiles)!=null?` · up to ${miles(s.maxMiles)}`:""}${kb}${s.zip?` · near you within ${esc(s.radiusMi??"any")} mi${kd.nearFirst?", pickup first":""}`:""}${run?` · last run ${esc(ago(run.at))}`:""}`;
   el.innerHTML=`<span>${one}</span><button type="button" class="linkbtn" data-panel="details" aria-expanded="${openPanel==="details"}" aria-controls="summary">Search details</button>${canWrite?`<button type="button" class="linkbtn" data-panel="paste" aria-expanded="${openPanel==="paste"}" aria-controls="paste">Add listings by hand</button>`:""}`;
 }
 function renderListings(){
@@ -1189,6 +1366,7 @@ function renderListings(){
   $("segListings").innerHTML=segHtml(true); wireSeg($("segListings"));
   if(searchesLoaded && !searches.length && openPanel==null) openPanel="new";
   $("quickBox").hidden=openPanel!=="new"; $("tNew").setAttribute("aria-expanded", String(openPanel==="new")); $("tNew").hidden=!canWrite;
+  if(openPanel==="new" && !$("quickKind").children.length){ if(!quickPicked) quickKind=guessKind($("quickText").value); renderQuickKind(); }
   renderSubline(); renderSummary(s);
   $("paste").hidden=!(openPanel==="paste" && s && !isAll() && canWrite);
   if(s) $("pasteGo").textContent=`Add to ${s.name}`;
@@ -1200,8 +1378,11 @@ function renderListings(){
     ? `${nd} checked deal${nd===1?"":"s"} across ${ss.length} search${ss.length===1?"":"es"}, ${open.length.toLocaleString("en-US")} open listings.`
     : `${s.name}: ${nd} checked deal${nd===1?"":"s"} in ${open.length.toLocaleString("en-US")} open listings.`;
   const live=rows.filter(r=>r.st!=="gone"), has=k=>live.length>0 && live.filter(r=>num(r.l[k])!=null).length>=live.length/2;
-  fieldOn={year:has("year"), miles:has("miles")};
-  const key=[selected, healthLoaded, fieldOn.year, fieldOn.miles, [...new Set(rows.map(r=>r.l.source))].sort().join(","), homeZip(), ...["radiusMi","minYear","maxYear","maxMiles","maxPrice"].map(k=>current()?.[k])].join("|");
+  const kd=scopeKind(), kf=Array.isArray(kd.filters)?kd.filters:[], generic=!kf.length;
+  fieldOn={year:(generic||kf.includes("year")) && has("year"), miles:(generic||kf.includes("miles")) && has("miles")};
+  // The panel rebuilds when the kind, its text options (brands seen) or the search's limits change.
+  const textSig=specDefs(kd).filter(d=>d.type==="text" && kf.includes(d.key)).map(d=>textOpts(d, rows.filter(r=>!r.sc.outside.length && r.st!=="gone")).map(x=>x[0]).join("~")).join("|");
+  const key=[selected, healthLoaded, fieldOn.year, fieldOn.miles, [...new Set(rows.map(r=>r.l.source))].sort().join(","), homeZip(), ...["radiusMi","minYear","maxYear","maxMiles","maxPrice"].map(k=>current()?.[k]), kindKey(current()), JSON.stringify(isAll()?null:[current()?.specLimits, current()?.models]), rows.some(r=>r.get!=null), textSig].join("|");
   if(key!==panelKey){ panelKey=key; buildPanel(rows); }
   $("fsort").innerHTML=SORTS.map(([v,t])=>`<option value="${v}">${t}</option>`).join(""); $("fsort").value=F.sort;
   if(document.activeElement!==$("q")) $("q").value=F.q;
@@ -1225,13 +1406,15 @@ let typeTimer=null;
 function typed(){ clearTimeout(typeTimer); typeTimer=setTimeout(changed,250); }
 $("fpanel").addEventListener("change",e=>{
   const t=e.target;
-  if(t.matches("input[data-f]")){ const k=t.dataset.f; F[k]=t.checked?[...new Set([...F[k],t.value])]:F[k].filter(v=>v!==t.value); changed(); }
+  if(t.matches("input[data-f]")){ const k=t.dataset.f, cur=fList(k); setFList(k, t.checked?[...new Set([...cur,t.value])]:cur.filter(v=>v!==t.value)); changed(); }
+  else if(t.matches("input[data-spu]")){ const k=t.dataset.spu, r={...spRange(k)}; r.nounk=!t.checked; setSpRange(k,r); changed(); }
   else if(t.matches("select[data-s=dist]")){ F.dist=t.value; changed(); }
   else if(t.matches("input[data-b=drop]")){ F.drop=t.checked; changed(); }
 });
 $("fpanel").addEventListener("input",e=>{
   const t=e.target;
   if(t.matches("input[data-n]")){ const raw=t.value.replace(/[^\d.]/g,""); F[t.dataset.n]=raw===""?null:num(raw); typed(); }
+  else if(t.matches("input[data-spn]")){ const [k,end]=t.dataset.spn.split(":"), raw=t.value.replace(/[^\d.]/g,""), r={...spRange(k)}; r[end]=raw===""?null:num(raw); setSpRange(k,r); typed(); }
   else if(t.matches("input[data-z]")){
     const v=t.value.replace(/\D/g,"").slice(0,5); if(v!==t.value) t.value=v;
     if(v.length===5 && GEO && !GEO.z[v]){ t.setAttribute("aria-invalid","true"); return; }
@@ -1244,6 +1427,7 @@ $("fpanel").addEventListener("click",e=>{
   if(a.dataset.act==="close") setSheet(false);
   if(a.dataset.act==="edit"){ const s=current(); setSheet(false); if(s && canWrite) openEditor(s); }
   if(a.dataset.act==="clear"){ clearFilters(); syncPanel(); changed(); }
+  if(a.dataset.act==="more"){ const g=a.closest(".fgroup"), on=g.classList.toggle("showall"); a.textContent=on?"Show fewer":`Show all ${g.querySelectorAll(".opt").length-1}`; }
 });
 $("fopen").onclick=()=>setSheet(!$("fpanel").classList.contains("open"));
 $("scrim").onclick=()=>setSheet(false);
@@ -1256,7 +1440,7 @@ document.addEventListener("click",e=>{
   syncPanel(); changed();
 });
 $("subline").addEventListener("click",e=>{ const b=e.target.closest("[data-panel]"); if(!b) return; openPanel=openPanel===b.dataset.panel?null:b.dataset.panel; renderListings(); });
-$("tNew").onclick=()=>{ openPanel=openPanel==="new"?null:"new"; renderListings(); if(openPanel==="new") $("quickText").focus(); };
+$("tNew").onclick=()=>{ openPanel=openPanel==="new"?null:"new"; renderListings(); if(openPanel==="new"){ if(!quickPicked) quickKind=guessKind($("quickText").value); renderQuickKind(); $("quickText").focus(); } };
 $("list").addEventListener("click",async e=>{
   const b=e.target.closest("button.act"); if(!b || !db || !canWrite) return;
   const l=listings.find(x=>x.id===b.dataset.id); if(!l) return;
@@ -1513,33 +1697,65 @@ setInterval(()=>{ if(tab==="listings"||tab==="sites") render(); }, 5*60*1000);
 $("connBar").addEventListener("click",()=>setTab("sites"));
 
 /* ---------- quick add ---------- */
-function parseQuick(text){
+// Kind picker on the quick box (v2.6): guessed from the words as you type until you pick one yourself.
+let quickKind="other", quickPicked=false;
+const VEHICLE_WORDS=/\b(motorcycles?|motorbike|dirt ?bike|cars?|trucks?|suv|van|atv|utv|side by side|snowmobile|jeep|pickup|sedan|coupe|wagon|harley|ducati|triumph|kawasaki|yamaha|suzuki|ktm|aprilia|husqvarna|honda|toyota|ford|chevy|chevrolet|subaru|bmw|audi|porsche|tesla|nissan|mazda|dodge|gmc|volvo|volkswagen|vw|tacoma|4runner|miles)\b/i;
+function guessKind(text){ if(/\bskis?\b/i.test(text) && KINDS.skis) return "skis"; if(VEHICLE_WORDS.test(text) && KINDS.vehicle) return "vehicle"; const b=skiBrandAt(text); if(b && KINDS.skis) return "skis"; return KINDS.other?"other":Object.keys(KINDS)[0]; }
+function renderQuickKind(){
+  $("quickKind").innerHTML=`<span>Kind:</span>`+Object.entries(KINDS).map(([k,v])=>`<button type="button" data-kind="${esc(k)}" aria-pressed="${k===quickKind}" title="${esc(v.hint||"")}">${esc(v.label||k)}</button>`).join("");
+}
+$("quickKind").addEventListener("click",e=>{ const b=e.target.closest("button[data-kind]"); if(!b) return; quickKind=b.dataset.kind; quickPicked=true; renderQuickKind(); });
+$("quickText").addEventListener("input",()=>{ if(quickPicked) return; const k=guessKind($("quickText").value); if(k!==quickKind){ quickKind=k; renderQuickKind(); } });
+// A ski brand at the start of the words, from the rules record's brand list (skis kind parse vocabulary).
+function skiBrandAt(text){
+  const pz=RULES_DOC?.kinds?.skis?.parse; if(!pz) return null;
+  const names=[...Object.keys(pz.aliases||{}), ...(pz.brands||[])].map(fold).sort((a,b)=>b.length-a.length);
+  const t=fold(text).trim().replace(/^(?:(?:19|20)\d{2}\+?|used|new|vintage)\s+/,"");
+  return names.find(n=>t===n || t.startsWith(n+" ")) || null;
+}
+function parseSkiQuick(t, out){
+  const rng=(a,b)=>{ const [lo,hi]=ordered(Number(a),Number(b)); return {min:lo,max:hi}; };
+  t=t.replace(/\b(\d{2,3})\s*(?:-|to|–)\s*(\d{2,3})\s*cm\b/i,(m,a,b)=>{ out.specLimits.lengthCm=rng(a,b); return " "; });
+  t=t.replace(/\b(\d{2,3})\s*cm\b/i,(m,a)=>{ if(!out.specLimits.lengthCm) out.specLimits.lengthCm={min:Number(a)-3,max:Number(a)+3}; return " "; });
+  t=t.replace(/\b(\d{2,3})\s*(?:-|to|–)\s*(\d{2,3})\s*mm\b(?:\s*(?:underfoot|waist))?/i,(m,a,b)=>{ out.specLimits.waistMm=rng(a,b); return " "; });
+  t=t.replace(/\b(\d{2,3})\s*mm\b(?:\s*(?:underfoot|waist))?/i,(m,a)=>{ if(!out.specLimits.waistMm) out.specLimits.waistMm={min:Number(a)-3,max:Number(a)+3}; return " "; });
+  t=t.replace(/\b(?:no bindings|without bindings|flat(?: skis)?)\b/i,()=>{ out.specLimits.bindings=["none"]; return " "; });
+  t=t.replace(/\b(?:with|w\/|plus|and|\+)\s*bindings\b/i,()=>{ out.specLimits.bindings=["yes"]; return " "; });
+  return t;
+}
+function parseQuick(text, kind){
   let t=" "+text.trim()+" ";
-  const out={maxPrice:null,minYear:null,maxYear:null,exclude:[]};
+  const out={maxPrice:null,minYear:null,maxYear:null,exclude:[],specLimits:{},models:[]};
+  if(kind==="skis") t=parseSkiQuick(t, out);
   t=t.replace(/\b(?:under|below|max|less than|up to)\s*\$?\s*([\d.,]+)\s*(k)?\b/i,(m,n,k)=>{ out.maxPrice=Math.round(Number(n.replace(/,/g,""))*(k?1000:1)); return " "; });
   t=t.replace(/\$\s*([\d.,]+)\s*(k)?\s*(?:or less|max|tops|ceiling)?/i,(m,n,k)=>{ if(out.maxPrice==null) out.maxPrice=Math.round(Number(n.replace(/,/g,""))*(k?1000:1)); return " "; });
   t=t.replace(/\b((?:19|20)\d{2})\s*(?:-|to|–)\s*((?:19|20)\d{2})\b/,(m,a,b)=>{ out.minYear=Number(a); out.maxYear=Number(b); return " "; });
   t=t.replace(/\b((?:19|20)\d{2})\s*\+|\b((?:19|20)\d{2})\s+or newer\b/i,(m,a,b)=>{ out.minYear=Number(a||b); return " "; });
   t=t.replace(/(?:\b(?:and|or|but)\s+)?\b(?:no|not|without|exclude|excluding)\s+([a-z][a-z0-9 ]{1,30}?)(?=,|;| and | or |$)/gi,(m,w)=>{ out.exclude.push(w.trim()); return " "; });
   out.keywords=t.replace(/[,;]+/g," ").replace(/\s+/g," ").trim();
+  // A brand and model at the start ("Blizzard Brahma 88") becomes the model the ski search looks for.
+  if(kind==="skis" && skiBrandAt(out.keywords)){ const m=out.keywords.replace(/\b(?:skis?|used|pair|for sale)\b/gi," ").replace(/\s+/g," ").trim(); if(m.split(" ").length>=2) out.models=[m]; }
   return out;
 }
 $("quick").addEventListener("submit", async e=>{
   e.preventDefault();
   const text=$("quickText").value.trim(); if(!text) return;
   if(!db){ toast("Saving isn't available in this view."); return; }
-  const p=parseQuick(text);
+  const kind=KINDS[quickKind]?quickKind:"other", kd=KINDS[kind]||KINDS_FALLBACK.other;
+  const p=parseQuick(text, kind);
   if(!p.keywords){ toast("Add a few words describing the item."); return; }
   const ref=searches[0]||{}, now=new Date().toISOString();
-  const body={ name:p.keywords.replace(/\b\w/g,c=>c.toUpperCase()).slice(0,40), keywords:p.keywords, exclude:p.exclude.join(", "), category:"",
-    maxPrice:p.maxPrice, marketPrice:null, dealPct:RULES.dealPctDefault, minYear:p.minYear, maxYear:p.maxYear, maxMiles:null,
+  const body={ name:p.keywords.replace(/\b\w/g,c=>c.toUpperCase()).slice(0,40), keywords:p.keywords, exclude:p.exclude.join(", "), category:kind==="skis"?"Skis":"",
+    kind, maxPrice:p.maxPrice, marketPrice:null, dealPct:RULES.dealPctDefault, minYear:p.minYear, maxYear:p.maxYear, maxMiles:null,
     zip:ref.zip||"", radiusMi:150, shipOutside:true, areas:"denver, boulder, cosprings, fortcollins, rockies, westslope", extraUrls:[],
-    sources:[], mustHave:[], autoSites:true, pricing:null, alerts:"deals", active:true,
-    notes:`Quick search typed by Cameron: "${text}". Match whole items only, no parts or accessories. Collector: on the first run refine keywords, category and exclusions, pick the sites, write verifyNotes, choose the pricing mode, and record what you decided here.`,
+    sources:[], mustHave:[], autoSites:true, pricing:kd.pricing==="per-item"?"per-item":null, alerts:"deals", active:true,
+    notes:`Quick search typed by Cameron: "${text}". Kind: ${kd.label||kind}. Match whole items only, no parts or accessories. Collector: on the first run refine keywords, category and exclusions, pick the sites, write verifyNotes, ${kd.pricing==="per-item"?"price each listing against its own model's fair used price":"choose the pricing mode"}, and record what you decided here.`,
     createdAt:now, updatedAt:now };
+  if(kd.models) body.models=p.models;
+  if(specDefs(kd).length) body.specLimits=p.specLimits;
   const id=(p.keywords.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"search")+"-"+Math.random().toString(36).slice(2,6);
   $("quickGo").disabled=true;
-  try{ await db.collection("searches").doc(id).set(body); selected=id; openPanel=null; try{localStorage.setItem("ds.sel",id)}catch(e){} $("quickText").value=""; toast("Hunting. The collector picks it up on its next run."); render(); }
+  try{ await db.collection("searches").doc(id).set(body); selected=id; openPanel=null; try{localStorage.setItem("ds.sel",id)}catch(e){} $("quickText").value=""; quickPicked=false; toast("Hunting. The collector picks it up on its next run."); render(); }
   catch(err){ toast("Couldn't save the search. Try again."); }
   finally{ $("quickGo").disabled=false; }
 });
@@ -1581,12 +1797,37 @@ $("pasteGo").onclick=async()=>{
 };
 
 /* ---------- editor ---------- */
-let delArmed=false;
+let delArmed=false, edSearch=null;
+// Kind fields (v2.6): vehicles and anything else keep year and miles; a kind with specs (skis) shows its own limits
+// from the rules record: named models, number ranges (length, underfoot) and choice lists (bindings, binding type).
+function renderKindFields(k, v){
+  const kd=KINDS[k]||KINDS_FALLBACK.other, lim=(v?.specLimits && typeof v.specLimits==="object") ? v.specLimits : {}, hasSpecs=specDefs(kd).length>0;
+  $("e_kindHint").textContent=kd.hint||"Decides the fields below and the filters beside the list";
+  // Year and miles: a kind lists them in its filters (skis: year only); a kind with no list keeps both.
+  const kf=Array.isArray(kd.filters)?kd.filters:[], showY=!kf.length || kf.includes("year"), showM=!kf.length || kf.includes("miles");
+  $("e_minYear").closest("label").hidden=!showY; $("e_maxYear").closest("label").hidden=!showY; $("e_maxMiles").closest("label").hidden=!showM;
+  $("e_vlimits").hidden=!showY && !showM;
+  let h="";
+  if(kd.models) h+=`<label class="f">Models you want<span class="hint">One per line, brand first, like Blizzard Brahma 88. Blank keeps every model. Named, the search keeps only these and the collector searches each one by name.</span><textarea id="e_models" rows="3" placeholder="Blizzard Brahma 88&#10;Nordica Enforcer 94">${esc((Array.isArray(v?.models)?v.models:[]).join("\n"))}</textarea></label>`;
+  const defs=(kd.limits||[]).map(key=>specDef(kd,key)).filter(Boolean);
+  const numsD=defs.filter(d=>d.type==="number");
+  if(numsD.length) h+=`<div class="grid2">${numsD.map(d=>{ const L=(lim[d.key] && typeof lim[d.key]==="object") ? lim[d.key] : {}, u=d.unit?` (${esc(d.unit)})`:"";
+    return `<label class="f">${esc(d.label)} from${u}<input type="number" min="0" step="any" data-lim="${esc(d.key)}:min" value="${esc(L.min??"")}"></label><label class="f">${esc(d.label)} to${u}<input type="number" min="0" step="any" data-lim="${esc(d.key)}:max" value="${esc(L.max??"")}"></label>`; }).join("")}</div>`;
+  defs.filter(d=>d.type==="choice" || d.type==="flag").forEach(d=>{ const L=Array.isArray(lim[d.key]) ? lim[d.key].map(String) : [];
+    h+=`<div class="limset"><span class="limh">${esc(d.label)}<span class="hint">Leave all unticked for any</span></span><div class="srcpick">${(d.options||[]).map(([val,lab])=>`<label><input type="checkbox" data-limc="${esc(d.key)}" value="${esc(val)}"${L.includes(String(val))?" checked":""}><span>${esc(lab)}</span></label>`).join("")}</div></div>`; });
+  $("e_klimits").innerHTML=h; $("e_klimits").hidden=!h;
+  $("e_limNote").textContent=hasSpecs
+    ? `Listings outside these limits (${[showY?"year":"", ...defs.filter(d=>d.type==="number").map(d=>d.label.toLowerCase())].filter(Boolean).join(", ")}), with bindings you didn't tick, not one of your named models, over the ceiling, or (with the box under Where ticked) far away and not shipping leave the list and never count as deals. They stay under Status: Outside search. A listing that doesn't say its length or width stays in.`
+    : "Listings outside these years and miles, over the ceiling, or (with the box under Where ticked) far away and not shipping leave the list and never count as deals. They stay under Status: Outside search.";
+}
+$("e_kind").addEventListener("change",()=>{ const k=$("e_kind").value, kd=KINDS[k]||{}; $("e_pricing").value=kd.pricing==="per-item"?"per-item":"median"; if(!$("e_category").value) $("e_category").placeholder=kd.label||""; renderKindFields(k, edSearch); });
 function openEditor(s){
-  editingId=s?.id||null; delArmed=false;
+  editingId=s?.id||null; delArmed=false; edSearch=s||null;
   $("edTitle").textContent=s?"Edit search":"New search";
   const v=s||{dealPct:RULES.dealPctDefault, alerts:"deals", active:true, zip:searches[0]?.zip||"", radiusMi:150, shipOutside:true, autoSites:true, sources:[]};
   $("e_name").value=v.name||""; $("e_keywords").value=v.keywords||""; $("e_exclude").value=v.exclude||""; $("e_category").value=v.category||"";
+  const ek=s?kindKey(s):"other";
+  $("e_kind").innerHTML=Object.entries(KINDS).map(([k,x])=>`<option value="${esc(k)}">${esc(x.label||k)}</option>`).join(""); $("e_kind").value=ek; renderKindFields(ek, s);
   $("e_pricing").value=v.pricing==="per-item"?"per-item":"median";
   $("e_maxPrice").value=v.maxPrice??""; $("e_marketPrice").value=v.marketPrice??""; $("e_dealPct").value=v.dealPct??RULES.dealPctDefault;
   $("e_minYear").value=v.minYear??""; $("e_maxYear").value=v.maxYear??""; $("e_maxMiles").value=v.maxMiles??"";
@@ -1627,6 +1868,15 @@ $("editor").addEventListener("submit", async e=>{
     sources:[...document.querySelectorAll('#e_sources input[data-src]:checked')].map(x=>x.value), autoSites:$("e_autoSites").checked,
     alerts:$("e_alerts").value, allowBranded:$("e_branded").value==="true", active:$("e_active").value==="true", notes:$("e_notes").value.trim(),
     updatedAt:new Date().toISOString() };
+  // v2.6: the kind and its limits. A choice list with every box or no box ticked means any.
+  const kk=$("e_kind").value, kdS=KINDS[kk]||KINDS_FALLBACK.other;
+  body.kind=kk;
+  if(kdS.models) body.models=($("e_models")?.value||"").split(/\n+/).map(x=>x.trim().replace(/\s+/g," ")).filter(Boolean).slice(0,20);
+  if(specDefs(kdS).length){ const lim={};
+    document.querySelectorAll("#e_klimits [data-lim]").forEach(i=>{ const [key,end]=i.dataset.lim.split(":"), v=num(i.value); if(v!=null){ lim[key]=lim[key]||{}; lim[key][end]=v; } });
+    (kdS.limits||[]).forEach(key=>{ const d=specDef(kdS,key); if(!d || (d.type!=="choice" && d.type!=="flag")) return;
+      const picked=[...document.querySelectorAll(`#e_klimits [data-limc="${key}"]:checked`)].map(x=>x.value); if(picked.length && picked.length<(d.options||[]).length) lim[key]=picked; });
+    body.specLimits=lim; }
   $("e_save").disabled=true;
   const sid=editingId, before=limitSplit(sid);
   let note="Search saved";

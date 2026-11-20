@@ -1,7 +1,7 @@
 {
  "title": "Two collectors and the page share one private data repo and one rules record",
- "version": "2.5",
- "builtFrom": "index.html + js/github-db.js, collectors/cloud.md and pc.md, tools/ds.py and rules.json v1.6, as of Nov 20",
+ "version": "2.6",
+ "builtFrom": "index.html + js/github-db.js, collectors/cloud.md and pc.md, tools/ds.py and rules.json v1.7, as of Nov 20",
  "updatedAt": "2026-11-20",
  "columns": [
   {
@@ -116,8 +116,8 @@
    "kind": "input",
    "name": "Cameron",
    "summary": "Quick search, search editor, paste box, listing status",
-   "does": "Cameron adds or edits searches, pastes links from anywhere, and marks listings watching, contacted or passed. The page saves each of these straight to the data repo with his GitHub token. The editor's year range, max miles, price ceiling and ship rule also decide which listings belong in the search, on every device.",
-   "code": "index.html: parseQuick(), openEditor(), parseLine(), status select in renderList()",
+   "does": "Cameron adds or edits searches, pastes links from anywhere, and marks listings watching, contacted or passed. The page saves each of these straight to the data repo with his GitHub token. Each search has a kind (Vehicle, Skis or Something else), picked in the quick box or the editor, and the kind decides which fields the editor shows. The editor's limits decide which listings belong in the search, on every device: year range, max miles, price ceiling and ship rule, and for skis the wanted models, length, underfoot and bindings.",
+   "code": "index.html: parseQuick(), parseSkiQuick(), guessKind(), openEditor(), renderKindFields(), parseLine(), status select in renderList()",
    "reads": [],
    "writes": [
     "searches.json",
@@ -126,7 +126,8 @@
    ],
    "rules": [
     "The page writes only its own files: searches.json, pasted.json, status.json",
-    "A search's own limits come before the sidebar filters, which only narrow inside them"
+    "A search's own limits come before the sidebar filters, which only narrow inside them",
+    "A search's kind comes from rules.json kinds; a free-form filter builder was left out on purpose, since every filter needs collector instructions"
    ],
    "keywords": [
     "quick search",
@@ -135,7 +136,13 @@
     "status",
     "watching",
     "passed",
-    "cameron"
+    "cameron",
+    "kind",
+    "skis",
+    "models",
+    "length",
+    "underfoot",
+    "bindings"
    ]
   },
   {
@@ -167,7 +174,8 @@
    ],
    "rules": [
     "All sections of rules.json",
-    "Never reviews photos and never emails: the PC does both"
+    "Never reviews photos and never emails: the PC does both",
+    "Records ski specs (brand, model, length, underfoot, bindings) on every ski listing and looks up maker underfoot specs, at most 10 a run"
    ],
    "keywords": [
     "cloud collector",
@@ -209,7 +217,9 @@
    ],
    "rules": [
     "Photo checks happen only here (rules.json: LEGITIMACY CHECK)",
-    "A blank screenshot leaves the check pending; never passed"
+    "A blank screenshot leaves the check pending; never passed",
+    "Records ski specs (brand, model, length, underfoot, bindings) on every ski listing and looks up maker underfoot specs, at most 10 a run",
+    "Named ski models are searched by name; Facebook gets at most 3 a run"
    ],
    "keywords": [
     "pc collector",
@@ -228,7 +238,7 @@
    "kind": "rules",
    "name": "Rules (rules.json)",
    "summary": "One record both collectors and the page follow",
-   "does": "Deal Scout's shared rules: thresholds and windows in numbers, the rule wording the collectors follow in text, and the Checks tab cards in display. Change a rule once here and every part picks it up on its next run or page load.",
+   "does": "Deal Scout's shared rules: thresholds and windows in numbers, the rule wording the collectors follow in text, the Checks tab cards in display, and the item kinds (Vehicle, Skis, Something else) in kinds. A kind lists the fields collectors record for it, the sidebar filters and search limits it offers, its pricing default, and for skis the word lists used to read brand, model, length, underfoot and bindings from titles. Change a rule once here and every part picks it up on its next run or page load.",
    "code": "dealscout-data/rules.json; page applyRulesDoc() and renderRules()",
    "live": {
     "type": "rules"
@@ -237,7 +247,8 @@
    "writes": [],
    "rules": [
     "Edited only in a build chat, then one test run of each collector",
-    "photoBackup is \"off\": no paid photo service"
+    "photoBackup is \"off\": no paid photo service",
+    "Skis: pickup listings rank ahead of ship-in at the same deal state, and ship-in skis with no shipping shown are priced with a $40 estimate"
    ],
    "keywords": [
     "rules",
@@ -245,7 +256,12 @@
     "threshold",
     "freshness",
     "checks",
-    "settings"
+    "settings",
+    "kinds",
+    "skis",
+    "vehicle",
+    "ship estimate",
+    "pickup first"
    ]
   },
   {
@@ -255,7 +271,7 @@
    "kind": "service",
    "name": "ds.py data helper",
    "summary": "How collectors read and change the data",
-   "does": "A small Python script the collectors run for every read and write: summaries, scoring (the same logic as the page), the work queues (which listings to re-open this run and which need a photo check, in order), storing listings, checks, routes and runs. It records each change, and on push it replays them on the newest copy if the other collector pushed first, so nothing gets overwritten; a change that no longer applies is skipped and reported, and a replay cut off partway is redone on the next push. It also sets a blocked site's pause from the rules record.",
+   "does": "A small Python script the collectors run for every read and write: summaries, scoring (the same logic as the page), the work queues (which listings to re-open this run and which need a photo check, in order), storing listings, checks, routes and runs. It records each change, and on push it replays them on the newest copy if the other collector pushed first, so nothing gets overwritten; a change that no longer applies is skipped and reported, and a replay cut off partway is redone on the next push. It also sets a blocked site's pause from the rules record. For ski searches it reads brand, model, length, underfoot and bindings from each listing's title and notes into specs, never overwriting what a collector sent, and `ds.py specs` backfills stored listings.",
    "code": "tools/ds.py",
    "reads": [
     "dealscout-data (all files)"
@@ -268,7 +284,9 @@
     "Each collector may write only its own route on a site",
     "A route can name the searches its read covered; the page judges a site per search",
     "Works out which listings are probably gone (unseen 7 days while the site read fine) the same way the page does",
-    "Leaves listings outside a search's limits out of deals, the median and the refresh queue, the same way the page does"
+    "Leaves listings outside a search's limits out of deals, the median and the refresh queue, the same way the page does",
+    "Applies ski length, underfoot, binding and named-model limits the same way the page does; an unknown value never puts a listing outside",
+    "Adds the $40 shipping estimate and the pickup-first order to scoring and the photo queue, the same way the page does"
    ],
    "keywords": [
     "ds.py",
@@ -280,7 +298,10 @@
     "python",
     "queue",
     "refresh",
-    "backlog"
+    "backlog",
+    "specs",
+    "skis",
+    "ship estimate"
    ]
   },
   {
@@ -345,8 +366,8 @@
    "kind": "page",
    "name": "Deal Scout page",
    "summary": "GitHub Pages site, your token per device",
-   "does": "The page at cbelknap980.github.io/DealScout. It reads the data repo with Cameron's GitHub token, re-checks every minute while open, and re-scores every listing in the browser with the rules record. It opens on Listings: checked deals as photo cards on top, then every listing with filters for deal state, price, year, miles, distance, site, status and price drops, plus Watch, Contacted and Pass on each row. Sites, Checks and this diagram are the other tabs; Sites judges each site per search, from the routes that covered that search. A listing unseen for 7 days while its site read fine counts as probably gone and moves under Gone. A listing outside the search's own limits from Edit search (years, max miles, price ceiling, or far away and not shipping when the search asks for that) never counts as a deal and moves under Outside search unless you marked it; the filters only narrow inside those limits.",
-   "code": "index.html (score(), itemOutside(), siteStatus(), renderListings(), passes(), renderResults(), renderSites(), renderChecks()); js/github-db.js (data layer)",
+   "does": "The page at cbelknap980.github.io/DealScout. It reads the data repo with Cameron's GitHub token, re-checks every minute while open, and re-scores every listing in the browser with the rules record. It opens on Listings: checked deals as photo cards on top, then every listing with filters for deal state, price, distance, how you'd get it (pickup or ships), site, status and price drops, plus the search kind's own filters: year and miles for vehicles; brand, length, underfoot, binding type and brand, and women's for skis. Each row has Watch, Contacted and Pass. Sites, Checks and this diagram are the other tabs; Sites judges each site per search, from the routes that covered that search. A listing unseen for 7 days while its site read fine counts as probably gone and moves under Gone. A listing outside the search's own limits from Edit search (years, max miles, price ceiling, far away and not shipping when the search asks for that, or for skis a model, length, underfoot or binding it rules out) never counts as a deal and moves under Outside search unless you marked it; the filters only narrow inside those limits. In ski searches, pickup listings sort ahead of ship-in ones in Best deal, and ship-in skis with no shipping shown carry a $40 estimate in their price.",
+   "code": "index.html (score(), itemOutside(), specOutside(), siteStatus(), renderListings(), passes(), kindGroups(), specGroup(), renderResults(), renderSites(), renderChecks()); js/github-db.js (data layer)",
    "live": {
     "type": "page"
    },
@@ -361,7 +382,8 @@
    ],
    "rules": [
     "The token stays in the browser on each device; it can only reach dealscout-data",
-    "Search limits leave a listing out of the open list and deals; years and miles also keep it out of the median"
+    "Search limits leave a listing out of the open list and deals; years and miles also keep it out of the median",
+    "Ski filters treat a value the ad doesn't state as its own choice (Not stated or Include ones with no length listed), never as a mismatch"
    ],
    "keywords": [
     "page",
@@ -376,7 +398,15 @@
     "pass",
     "sort",
     "outside search",
-    "search limits"
+    "search limits",
+    "skis",
+    "brand",
+    "length",
+    "underfoot",
+    "bindings",
+    "pickup",
+    "ship estimate",
+    "kind"
    ]
   }
  ],

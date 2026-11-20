@@ -17,7 +17,7 @@ python3 DealScout/tools/ds.py summary
 
 ## RULES
 
-Deal Scout's shared rules are in `dealscout-data/rules.json`. Before anything else, read the whole file. Follow every section of its `text` exactly as if it were written here, using its `numbers` wherever a section says numbers.<name>. Where these instructions and the rules record disagree, the rules record wins, except for which sites you read, how you read them, and which route you write ("pc"). If rules.json can't be read or has no text, don't collect: write one run record per active search with newCount 0 and note "Rules record unreadable; run skipped", commit, and finish with that one line. Start every run note with the rules version, e.g. "rules v1.4:".
+Deal Scout's shared rules are in `dealscout-data/rules.json`. Before anything else, read the whole file. Follow every section of its `text` (including KINDS, v1.7) exactly as if it were written here, using its `numbers` wherever a section says numbers.<name>. Where these instructions and the rules record disagree, the rules record wins, except for which sites you read, how you read them, and which route you write ("pc"). If rules.json can't be read or has no text, don't collect: write one run record per active search with newCount 0 and note "Rules record unreadable; run skipped", commit, and finish with that one line. Start every run note with the rules version, e.g. "rules v1.4:".
 
 ## TOOLS
 
@@ -31,6 +31,10 @@ Deal Scout's shared rules are in `dealscout-data/rules.json`. Before anything el
 ## BROWSER CONDUCT
 
 Read search-result pages, listing pages and listing photos only. Never log in, never type a password, never create an account, never click Notify me, Save search, Follow, Message, Make offer or anything that writes to an account, and never change a setting or sign out. Cameron signs in to Facebook himself in this browser and the sign-in persists. If Facebook shows a checkpoint or identity check, stop Facebook for this run (step 2a) and never try to get around it. Keep Facebook light: the search loads plus at most 30 item pages per run, one at a time, a few seconds apart. Keep the pace human: at most about 100 page loads per run across all sites (photo views included), one at a time. Close every tab you opened before you finish.
+
+## ITEM KINDS (v2.6, rules v1.7)
+
+Each search has a kind (`ds summary` prints it with the search's limits). For a ski search: (1) every `ds upsert` of a listing you read the ad for carries the specs you can read from it (see KINDS: lengthCm, waistMm with waistFrom, bindings, bindingType, bindingBrand, bindingModel, women); ds.py fills the rest from the title, so keep titles as "<Brand> <Model> <length> cm + <binding>". (2) When an open ski listing you re-open has no waistMm, or waistFrom "model name", look up the maker's width for that model and length (one web search, spec page only) and send it with waistFrom "spec"; at most 10 such look-ups a run, deal-priced listings first. (3) When the search has named models (search.models), also search each one by name on every site you read for it, as KINDS says (Facebook: at most 3 model searches a run from denver with the search's fbRadiusKm, taking the models in turn across runs, counted in the page budget; eBay: one extra query with the models joined as (brahma 88,enforcer 94); nationwide Craigslist hubs: the models joined as (brahma 88|enforcer 94)). (4) A listing outside the search's specLimits or named models is not a match for a new ad; stored ones are hidden by ds.py and the page, never deleted. (5) Ship-in skis with no shipping price are scored with the kind's shipEstimate; record shipCost whenever the ad or checkout shows it, so the estimate drops out.
 
 ## STEPS
 
