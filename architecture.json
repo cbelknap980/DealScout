@@ -1,7 +1,7 @@
 {
  "title": "Two collectors and the page share one private data repo and one rules record",
- "version": "2.4",
- "builtFrom": "index.html + js/github-db.js, collectors/cloud.md and pc.md, tools/ds.py and rules.json v1.5, as of Nov 20",
+ "version": "2.5",
+ "builtFrom": "index.html + js/github-db.js, collectors/cloud.md and pc.md, tools/ds.py and rules.json v1.6, as of Nov 20",
  "updatedAt": "2026-11-20",
  "columns": [
   {
@@ -116,7 +116,7 @@
    "kind": "input",
    "name": "Cameron",
    "summary": "Quick search, search editor, paste box, listing status",
-   "does": "Cameron adds or edits searches, pastes links from anywhere, and marks listings watching, contacted or passed. The page saves each of these straight to the data repo with his GitHub token.",
+   "does": "Cameron adds or edits searches, pastes links from anywhere, and marks listings watching, contacted or passed. The page saves each of these straight to the data repo with his GitHub token. The editor's year range, max miles, price ceiling and ship rule also decide which listings belong in the search, on every device.",
    "code": "index.html: parseQuick(), openEditor(), parseLine(), status select in renderList()",
    "reads": [],
    "writes": [
@@ -125,7 +125,8 @@
     "status.json"
    ],
    "rules": [
-    "The page writes only its own files: searches.json, pasted.json, status.json"
+    "The page writes only its own files: searches.json, pasted.json, status.json",
+    "A search's own limits come before the sidebar filters, which only narrow inside them"
    ],
    "keywords": [
     "quick search",
@@ -266,7 +267,8 @@
     "Collectors never hand-edit JSON or force-push",
     "Each collector may write only its own route on a site",
     "A route can name the searches its read covered; the page judges a site per search",
-    "Works out which listings are probably gone (unseen 7 days while the site read fine) the same way the page does"
+    "Works out which listings are probably gone (unseen 7 days while the site read fine) the same way the page does",
+    "Leaves listings outside a search's limits out of deals, the median and the refresh queue, the same way the page does"
    ],
    "keywords": [
     "ds.py",
@@ -343,8 +345,8 @@
    "kind": "page",
    "name": "Deal Scout page",
    "summary": "GitHub Pages site, your token per device",
-   "does": "The page at cbelknap980.github.io/DealScout. It reads the data repo with Cameron's GitHub token, re-checks every minute while open, and re-scores every listing in the browser with the rules record. It opens on Listings: checked deals as photo cards on top, then every listing with filters for deal state, price, year, miles, distance, site, status and price drops, plus Watch, Contacted and Pass on each row. Sites, Checks and this diagram are the other tabs; Sites judges each site per search, from the routes that covered that search. A listing unseen for 7 days while its site read fine counts as probably gone and moves under Gone.",
-   "code": "index.html (score(), siteStatus(), renderListings(), passes(), renderResults(), renderSites(), renderChecks()); js/github-db.js (data layer)",
+   "does": "The page at cbelknap980.github.io/DealScout. It reads the data repo with Cameron's GitHub token, re-checks every minute while open, and re-scores every listing in the browser with the rules record. It opens on Listings: checked deals as photo cards on top, then every listing with filters for deal state, price, year, miles, distance, site, status and price drops, plus Watch, Contacted and Pass on each row. Sites, Checks and this diagram are the other tabs; Sites judges each site per search, from the routes that covered that search. A listing unseen for 7 days while its site read fine counts as probably gone and moves under Gone. A listing outside the search's own limits from Edit search (years, max miles, price ceiling, or far away and not shipping when the search asks for that) never counts as a deal and moves under Outside search unless you marked it; the filters only narrow inside those limits.",
+   "code": "index.html (score(), itemOutside(), siteStatus(), renderListings(), passes(), renderResults(), renderSites(), renderChecks()); js/github-db.js (data layer)",
    "live": {
     "type": "page"
    },
@@ -358,7 +360,8 @@
     "status.json"
    ],
    "rules": [
-    "The token stays in the browser on each device; it can only reach dealscout-data"
+    "The token stays in the browser on each device; it can only reach dealscout-data",
+    "Search limits leave a listing out of the open list and deals; years and miles also keep it out of the median"
    ],
    "keywords": [
     "page",
@@ -371,7 +374,9 @@
     "deal state",
     "watch",
     "pass",
-    "sort"
+    "sort",
+    "outside search",
+    "search limits"
    ]
   }
  ],

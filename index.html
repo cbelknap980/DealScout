@@ -191,6 +191,7 @@ label.f span.hint{font-weight:400;color:var(--muted);font-size:12.5px}
 label.f input,label.f textarea,label.f select{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;width:100%;min-width:0}
 fieldset{border:1px solid var(--line);border-radius:var(--r);padding:10px 14px 14px;margin:0}
 legend{font-family:var(--display);font-size:16px;padding:0 4px;color:var(--head)}
+.lim-note{font-size:13px;margin:0 0 10px}
 .srcpick{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:6px 14px}
 .srcpick label,.cbx{display:flex;gap:8px;align-items:flex-start;font-size:14.5px}
 .srcpick small{display:block;color:var(--muted);font-size:12px}
@@ -502,7 +503,7 @@ body.sheet-open{overflow:hidden}
     <div class="grid2">
       <label class="f">Name<input id="e_name" required placeholder="Used skis"></label>
       <label class="f">Keywords<span class="hint">What a matching title contains</span><input id="e_keywords" required placeholder="skis with bindings"></label>
-      <label class="f">Exclude words<span class="hint">Comma separated</span><input id="e_exclude" placeholder="kids, junior, boots only"></label>
+      <label class="f">Exclude words<span class="hint">Comma separated. The collector skips ads about these</span><input id="e_exclude" placeholder="kids, junior, boots only"></label>
       <label class="f">Category<input id="e_category" placeholder="Skis"></label>
     </div>
     <fieldset>
@@ -516,13 +517,14 @@ body.sheet-open{overflow:hidden}
           <span class="hint">Use "each listing" when a search mixes many models, like skis</span>
         </label>
         <label class="f">Deal threshold (% under)<input id="e_dealPct" type="number" min="0" max="90" step="any" value="15"></label>
-        <label class="f">Price ceiling ($)<span class="hint">Hard max. Blank for none</span><input id="e_maxPrice" type="number" min="0" step="any"></label>
+        <label class="f">Price ceiling ($)<span class="hint">Hard max: anything over it leaves the list. Blank for none</span><input id="e_maxPrice" type="number" min="0" step="any"></label>
         <label class="f">Market price ($)<span class="hint">Optional override for median pricing</span><input id="e_marketPrice" type="number" min="0" step="any"></label>
         <label class="f">Rebuilt or salvage titles<select id="e_branded"><option value="false">Never count as deals</option><option value="true">Count as deals</option></select></label>
       </div>
     </fieldset>
     <fieldset>
-      <legend>Item filters</legend>
+      <legend>Search limits</legend>
+      <p class="note lim-note">Listings outside these years and miles, over the ceiling, or (with the box under Where ticked) far away and not shipping leave the list and never count as deals. They stay under Status: Outside search.</p>
       <div class="grid2">
         <label class="f">Min year<input id="e_minYear" type="number" min="1900" max="2100"></label>
         <label class="f">Max year<input id="e_maxYear" type="number" min="1900" max="2100"></label>
@@ -596,7 +598,7 @@ const RULES = {
 };
 let RULES_DOC = null;
 const TABS = ["listings","sites","checks","how"];
-const PAGE_VERSION = "2.4";
+const PAGE_VERSION = "2.5";
 let ARCH = null, archState = "loading";
 const EMPTY = document.getElementById("empty").outerHTML;
 const $ = id => document.getElementById(id);
@@ -612,7 +614,7 @@ let MK = new Map();
 try { selected = localStorage.getItem("ds.sel"); } catch(e) {}
 if(!selected) selected = "all";
 
-function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>t.hidden=true,2400); }
+function toast(msg, ms){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>t.hidden=true,ms||2400); }
 function ago(iso){ if(!iso) return ""; const d=(Date.now()-new Date(iso).getTime())/60000; if(isNaN(d)) return ""; if(d<60) return Math.max(1,Math.round(d))+" min ago"; if(d<1440) return Math.round(d/60)+" h ago"; return Math.round(d/1440)+" d ago"; }
 function hoursSince(iso){ const t=new Date(iso||"").getTime(); return isNaN(t)?Infinity:(Date.now()-t)/36e5; }
 function site(id){ const d=health.find(h=>h.id===id)||{}; const b=SITE_DEFAULTS[id]||{}; return {id, name:d.name||b.name||id, how:d.how||b.how||"cloud", kind:d.kind||b.kind||"", home:d.home||b.home||"", ships:d.ships??b.ships??null, local:d.local??b.local??null}; }
@@ -625,10 +627,31 @@ function median(arr){ if(!arr.length) return null; const a=[...arr].sort((x,y)=>
 const brandedRe = words => new RegExp("\\b(" + words.map(w=>String(w).replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|") + ")\\b", "i");
 let BRANDED = brandedRe(RULES.brandedWords);
 function branded(l){ if(l.titleStatus) return !/^clean$/i.test(l.titleStatus); return BRANDED.test(String(l.title||"")); }
+/* ---------- search limits (v2.5, same as ds.py item_outside() and score()) ----------
+   The year range, max miles and price ceiling set in Edit search, and its ship rule (outside the radius, keep only
+   listings that ship), decide what belongs in the search; the sidebar only narrows inside them. A listing outside
+   them never counts as a deal or a lead and, unless you marked it, leaves the open list for Status: Outside search.
+   Year and miles also keep it out of the market median (an older bike is a different market); the ceiling and the
+   ship rule are about you, not the market, so those listings still count toward it. An unknown year, miles, price
+   or distance never puts a listing outside. Exclude words stay with the collector: titles mention them innocently. */
+const OUT_LABEL={year:"year", miles:"miles", price:"over ceiling", ship:"far and doesn't ship"};
+function yearSpan(s){ const [lo,hi]=ordered(num(s.minYear),num(s.maxYear)); return lo!=null&&hi!=null?(lo===hi?`${lo}`:`${lo} to ${hi}`):lo!=null?`${lo} or newer`:hi!=null?`${hi} or older`:""; }
+function itemOutside(l, s){
+  const out=[], [lo,hi]=ordered(num(s.minYear),num(s.maxYear)), y=num(l.year), m=num(l.miles), mx=num(s.maxMiles);
+  if(y!=null && ((lo!=null && y<lo) || (hi!=null && y>hi))) out.push("year");
+  if(m!=null && mx!=null && m>mx) out.push("miles");
+  return out;
+}
+function outsideText(l, s, sc){
+  const [lo]=ordered(num(s.minYear),num(s.maxYear));
+  return sc.outside.map(k=>k==="year"?(lo!=null && num(l.year)<lo?`${l.year} is older than ${lo}`:`${l.year} is newer than ${ordered(num(s.minYear),num(s.maxYear))[1]}`):k==="miles"?`${miles(l.miles)} is over ${miles(s.maxMiles)}`:k==="price"?`${money(sc.cost)} is over your ${money(sc.ceiling)} ceiling`:`${Math.round(sc.homeDist).toLocaleString("en-US")} mi away and doesn't ship`).join("; ");
+}
+// Hidden from the open list: outside the search's limits and not marked watching or contacted.
+function outsideHidden(l, sc){ return sc.outside.length>0 && (l.status||"new")==="new"; }
 function marketFor(s){
   if(s.pricing==="per-item") return {value:null, perItem:true, basis:"each listing against its own model's fair used price"};
   const set=num(s.marketPrice); if(set) return {value:set, basis:"set by you"};
-  const prices=listings.filter(l=>l.searchId===s.id && l.status!=="passed" && !l.gone && !l.pastedOnly && !branded(l) && l.check?.status!=="failed" && num(l.price)).map(l=>Number(l.price));
+  const prices=listings.filter(l=>l.searchId===s.id && l.status!=="passed" && !l.gone && !l.pastedOnly && !branded(l) && l.check?.status!=="failed" && num(l.price) && !itemOutside(l,s).length).map(l=>Number(l.price));
   const m=median(prices);
   return m ? {value:m, basis:`median of ${prices.length} listing${prices.length===1?"":"s"}`} : {value:null, basis:"no listings yet"};
 }
@@ -676,16 +699,20 @@ function score(l, s){
   const confirmedAt = [l.lastChecked, l.lastSeen, chk.at].filter(Boolean).sort().pop();
   const fresh = hoursSince(confirmedAt) <= RULES.priceFreshHours;
   const live = !l.gone;
-  const isDeal = live && underMarket && underCeiling && reachable && verified && !brandedTitle && checkPassed && fresh;
-  const lead = live && underMarket && underCeiling && reachable && !brandedTitle && !isDeal && !checkFailed;
+  const outside = itemOutside(l, s);
+  if(ceiling!=null && cost!=null && cost>ceiling) outside.push("price");
+  if(!reachable) outside.push("ship");
+  const fits = !outside.length;
+  const isDeal = live && fits && underMarket && underCeiling && reachable && verified && !brandedTitle && checkPassed && fresh;
+  const lead = live && fits && underMarket && underCeiling && reachable && !brandedTitle && !isDeal && !checkFailed;
   // What a lead waits on (v2.1, same as ds.py score()): a caution verdict is settled until the price changes
   // after it or it is older than recheckCheckDays; a passed check with an old price only needs a re-open.
   const chkAt = chk.at || "";
   const settled = chk.status==="caution" && hoursSince(chkAt) <= RULES.recheckCheckDays*24 && String(l.priceChangedAt||"") <= chkAt;
   const concern = lead && settled, reconfirm = lead && checkPassed && !fresh, photoWork = lead && !checkPassed && !settled;
-  return {pct, ref, cost, isDeal, lead, concern, reconfirm, photoWork, checkFailed, confirmedAt, needLevel, brandedTitle, underMarket, underCeiling, ceiling, inRadius, radius:r, homeDist, fresh};
+  return {pct, ref, cost, isDeal, lead, concern, reconfirm, photoWork, checkFailed, confirmedAt, needLevel, brandedTitle, underMarket, underCeiling, ceiling, inRadius, radius:r, homeDist, fresh, outside};
 }
-function openOf(s){ return listings.filter(l=>l.searchId===s.id && l.status!=="passed" && !l.gone && probablyGone(l,s)==null); }
+function openOf(s){ return listings.filter(l=>{ if(l.searchId!==s.id || l.status==="passed" || l.gone) return false; const sc=score(l,s); return probablyGone(l,s,sc)==null && !outsideHidden(l,sc); }); }
 
 /* ---------- probably gone (v2.4, same as ds.py probably_gone()) ----------
    A listing nothing has shown for RULES.probablyGoneDays days, whose site has been read fine since that many days
@@ -763,7 +790,7 @@ function isAll(){ return selected==="all"; }
 function segHtml(withAll){
   const sel=withAll ? selected : current()?.id;
   const pill=(id,name,deals,total,paused)=>`<button type="button" data-id="${esc(id)}" aria-pressed="${id===sel}" class="${paused?"paused":""}">${deals?'<span class="dot" title="Has checked deals"></span>':""}${esc(name)}<span class="count">${total}</span></button>`;
-  const per=searches.map(s=>({s, deals:openOf(s).filter(l=>score(l,s).isDeal).length, total:listings.filter(l=>l.searchId===s.id && !l.gone && probablyGone(l,s)==null).length}));
+  const per=searches.map(s=>({s, deals:openOf(s).filter(l=>score(l,s).isDeal).length, total:listings.filter(l=>{ if(l.searchId!==s.id || l.gone) return false; const sc=score(l,s); return probablyGone(l,s,sc)==null && !outsideHidden(l,sc); }).length}));
   const act=per.filter(x=>x.s.active!==false);
   const all=(withAll && searches.length>1) ? pill("all","All searches", act.reduce((n,x)=>n+x.deals,0), act.reduce((n,x)=>n+x.total,0), false) : "";
   return all + per.map(x=>pill(x.s.id, x.s.name||"Untitled", x.deals, x.total, x.s.active===false)).join("");
@@ -879,7 +906,7 @@ function renderChecks(){
 const DSTATE=[["deal","Checked deal"],["checking","Being checked"],["concern","Has concerns"],["none","Not priced like a deal"],["branded","Branded title"],["failed","Failed check"]];
 const DLABEL=Object.fromEntries(DSTATE);
 const TIER={deal:0, checking:1, concern:2, none:3, branded:4, failed:5};
-const STATUSES=[["new","New"],["watching","Watching"],["contacted","Contacted"],["passed","Passed"],["gone","Gone"]];
+const STATUSES=[["new","New"],["watching","Watching"],["contacted","Contacted"],["passed","Passed"],["outside","Outside search"],["gone","Gone"]];
 const SLABEL=Object.fromEntries(STATUSES);
 const OPEN_ST=["new","watching","contacted"];
 const SORTS=[["deal","Best deal"],["price","Lowest price"],["drop","Biggest price drop"],["new","Newest found"],["listed","Listed longest"],["near","Closest"],["year","Newest year"],["miles","Lowest miles"]];
@@ -891,7 +918,7 @@ function searchOf(l){ return searches.find(s=>s.id===l.searchId)||null; }
 function isBid(l){ return l.priceKind==="bid" || /\bauction\b/i.test(String(l.title||"")); }
 function dropOf(l){ const p=num(l.price); if(p==null) return 0; const prev=(l.priceHistory||[]).map(h=>num(h&&h.price)).filter(v=>v!=null); const hi=prev.length?Math.max(...prev):null; return (hi!=null && hi>p) ? hi-p : 0; }
 function dstate(sc){ if(sc.checkFailed) return "failed"; if(sc.isDeal) return "deal"; if(sc.brandedTitle) return "branded"; if(sc.concern) return "concern"; if(sc.lead) return "checking"; return "none"; }
-function stOf(l, pg){ return (l.gone || pg!=null) ? "gone" : (l.status||"new"); }
+function stOf(l, pg, sc){ return (l.gone || pg!=null) ? "gone" : (sc && outsideHidden(l,sc)) ? "outside" : (l.status||"new"); }
 function homeZip(){ const s=isAll()?scopeSearches()[0]:current(); return s?.zip||""; }
 function effZip(){ return F.zip || homeZip(); }
 
@@ -942,7 +969,7 @@ function scopeRows(){
     const s=searchOf(l), sc=score(l,s), pg=probablyGone(l,s,sc);
     let d=milesBetween(origin,coordsFor(l));
     if(d==null && zip===s.zip && typeof l.distanceMi==="number") d=l.distanceMi;
-    return {l, s, sc, d, ds:dstate(sc), st:stOf(l,pg), pg, bid:isBid(l), drop:dropOf(l)};
+    return {l, s, sc, d, ds:dstate(sc), st:stOf(l,pg,sc), pg, bid:isBid(l), drop:dropOf(l)};
   });
 }
 // A range typed backwards ("2015 to 2009") is read the right way round.
@@ -984,16 +1011,20 @@ function optList(name, opts, counts, picked){
 }
 function buildPanel(rows){
   const all=isAll(), s=current();
-  const pr=spread(rows,l=>l.price), yr=spread(rows,l=>l.year), mi=spread(rows,l=>l.miles);
+  // Placeholders show the spread of what's in the search; the line under a range says the search's own limit,
+  // which the sidebar can only narrow (listings outside it are under Status: Outside search).
+  const inRows=rows.filter(r=>!r.sc.outside.length);
+  const pr=spread(inRows,l=>l.price), yr=spread(inRows,l=>l.year), mi=spread(inRows,l=>l.miles);
+  const limNote=txt=>(!all && s && txt)?`<p class="note">This search: ${esc(txt)}.${canWrite?` <button type="button" class="linkbtn" data-act="edit">Change</button>`:""}</p>`:"";
   const siteIds=[...new Set(rows.map(r=>r.l.source))].sort((a,b)=>site(a).name.localeCompare(site(b).name));
   const nearTxt=all?"Near you (each search's own radius)":(s?.radiusMi&&s?.zip?`Near you (${Number(s.radiusMi).toLocaleString("en-US")} mi of ${s.zip})`:"Near you");
   const fm=n=>"$"+Math.round(n).toLocaleString("en-US");
   $("fpanel").innerHTML=`
     <div class="fp-head"><span>Filters</span><button type="button" class="btn" data-act="close">Done</button></div>
     <div class="fgroup"><h3>Deal state</h3>${optList("deal",DSTATE,new Map(),F.deal)}</div>
-    <div class="fgroup"><h3>Price</h3><div class="range"><input class="field num" inputmode="numeric" data-n="pmin" aria-label="Lowest price" placeholder="${pr?fm(pr[0]):"Min"}"><span>to</span><input class="field num" inputmode="numeric" data-n="pmax" aria-label="Highest price" placeholder="${pr?fm(pr[1]):"Max"}"></div></div>
-    ${fieldOn.year?`<div class="fgroup"><h3>Year</h3><div class="range"><input class="field num" inputmode="numeric" maxlength="4" data-n="ymin" aria-label="Oldest year" placeholder="${yr?yr[0]:"From"}"><span>to</span><input class="field num" inputmode="numeric" maxlength="4" data-n="ymax" aria-label="Newest year" placeholder="${yr?yr[1]:"To"}"></div></div>`:""}
-    ${fieldOn.miles?`<div class="fgroup"><h3>Miles</h3><div class="range"><span>Up to</span><input class="field num" inputmode="numeric" data-n="mmax" aria-label="Most miles" placeholder="${mi?Math.round(mi[1]).toLocaleString("en-US"):"Any"}" style="grid-column:2/4"></div></div>`:""}
+    <div class="fgroup"><h3>Price</h3><div class="range"><input class="field num" inputmode="numeric" data-n="pmin" aria-label="Lowest price" placeholder="${pr?fm(pr[0]):"Min"}"><span>to</span><input class="field num" inputmode="numeric" data-n="pmax" aria-label="Highest price" placeholder="${pr?fm(pr[1]):"Max"}"></div>${limNote(s?.maxPrice?`ceiling ${fm(s.maxPrice)}`:"")}</div>
+    ${fieldOn.year?`<div class="fgroup"><h3>Year</h3><div class="range"><input class="field num" inputmode="numeric" maxlength="4" data-n="ymin" aria-label="Oldest year" placeholder="${yr?yr[0]:"From"}"><span>to</span><input class="field num" inputmode="numeric" maxlength="4" data-n="ymax" aria-label="Newest year" placeholder="${yr?yr[1]:"To"}"></div>${limNote(s?yearSpan(s):"")}</div>`:""}
+    ${fieldOn.miles?`<div class="fgroup"><h3>Miles</h3><div class="range"><span>Up to</span><input class="field num" inputmode="numeric" data-n="mmax" aria-label="Most miles" placeholder="${mi?Math.round(mi[1]).toLocaleString("en-US"):"Any"}" style="grid-column:2/4"></div>${limNote(s?.maxMiles?`up to ${miles(s.maxMiles)}`:"")}</div>`:""}
     <div class="fgroup"><h3>Distance</h3><select class="field" data-s="dist" aria-label="Distance"><option value="any">Any distance</option><option value="near">${esc(nearTxt)}</option>${RADII.map(r=>`<option value="${r}">Within ${r.toLocaleString("en-US")} mi</option>`).join("")}</select>
       <label class="zipl">of ZIP <input class="field zip num" data-z="zip" inputmode="numeric" maxlength="5" autocomplete="postal-code" aria-label="ZIP code to measure from" placeholder="${esc(homeZip()||"ZIP")}"></label></div>
     <div class="fgroup"><h3>Site</h3>${optList("site",siteIds.map(id=>[id,site(id).name]),new Map(),F.site)}</div>
@@ -1081,7 +1112,10 @@ function rowHtml({l,s,sc,d,ds,st,pg,bid}){
   if(bid) pill=`<span class="pill over" title="An auction's current bid, not a final price">auction bid</span>`;
   else if(sc.pct!=null){ const p=Math.round(sc.pct*100), cls=sc.isDeal?"deal":(sc.pct>0?"near":"over"); pill=`<span class="pill ${cls}">${p>0?`${p}% under`:p<0?`${-p}% over`:"at market"}</span>`; }
   else if(s.pricing==="per-item") pill=`<span class="pill over">fair price pending</span>`;
-  const ceilingNote=(sc.ceiling!=null && !sc.underCeiling)?`<span>over your ${money(sc.ceiling)} ceiling</span>`:"";
+  // Outside the search's own limits (v2.5): says which limit, in place of the old "over your ceiling" note.
+  const outTxt=!off && sc.outside.length ? outsideText(l,s,sc) : "";
+  const outPill=outTxt?`<span class="pill over" title="${esc(outTxt)}">outside search</span>`:"";
+  const outNote=outTxt?`<span class="away">outside this search: ${esc(outTxt)}</span>`:"";
   const radiusNote=(sc.isDeal && sc.radius!=null && s.zip)?(sc.inRadius?`<span class="flag">near you</span>`:(sc.homeDist==null?`<span class="away">location unknown</span>`:`<span class="away">outside your ${Number(sc.radius).toLocaleString("en-US")} mi</span>`)):"";
   const unv=l.gone?`<span class="pill over">gone</span>`:pg!=null?`<span class="pill over" title="Nothing has shown this ad for ${pg} days though its site was read fine. It comes back if it shows up again.">probably gone</span>`:(l.verified===false?`<span class="pill unv">unverified</span>`:"");
   const tb=branded(l)?`<span class="pill unv">${esc(l.titleStatus||"branded")} title</span>`:"";
@@ -1098,20 +1132,21 @@ function rowHtml({l,s,sc,d,ds,st,pg,bid}){
   const freshTxt=l.gone?"":pg!=null?`<span class="away">not seen in ${pg} days</span>`:l.verified===false?`<span class="away">price not confirmed on the ad yet</span>`:seenAt?`<span>price checked ${esc(ago(seenAt))}</span>`:"";
   const ref=l.refPrice?`<span>fair used ${money(l.refPrice)}${l.refBasis?` (${esc(l.refBasis)})`:""}</span>`:"";
   const ship=num(l.shipCost)?`<span>+ ${money(l.shipCost)} shipping</span>`:(l.ships===true?`<span>ships</span>`:"");
-  const lead=off?"":ds==="deal"?'<span class="flag">Deal · </span>':ds==="concern"?'<span class="away">Has concerns · </span>':ds==="checking"?'<span class="away">Being checked · </span>':ds==="failed"?'<span style="color:var(--bad);font-weight:600">Likely not legit · </span>':"";
+  const lead=off?"":ds==="deal"?'<span class="flag">Deal · </span>':ds==="concern"?'<span class="away">Has concerns · </span>':ds==="checking"?'<span class="away">Being checked · </span>':ds==="failed"?'<span style="color:var(--bad);font-weight:600">Likely not legit · </span>':outTxt?'<span class="away">Outside search · </span>':"";
   const acts=`<div class="acts" role="group" aria-label="Mark this listing">${[["watching","Watch","Watching"],["contacted","Contacted","Contacted"],["passed","Pass","Passed"]].map(([v,t,on])=>`<button type="button" class="act${v==="passed"?" pass":""}" data-id="${esc(l.id)}" data-v="${v}" aria-pressed="${l.status===v}"${canWrite?"":" disabled"}>${l.status===v?on:t}</button>`).join("")}</div>`;
-  return `<article class="row${(st==="passed"||off)?" passed":""}">
+  return `<article class="row${(st==="passed"||st==="outside"||off)?" passed":""}">
     <div class="price"><span class="amt">${money(l.price)}</span>${wasHtml}${off?"":pill}</div>
     <div class="title">${lead}${l.url?`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.title)}</a>`:esc(l.title)}</div>
     ${acts}
-    <div class="meta">${photos}${unv}${tb}${ckLabel}${isAll()?`<span>${esc(s.name)}</span>`:""}<span>${esc(site(l.source).name)}</span>${l.miles?`<span class="num">${miles(l.miles)}</span>`:""}<span>${esc(l.location||"")}</span>${distTxt}${ship}<span>${esc(l.seller||"")}${l.sellerType?` (${esc(l.sellerType)})`:""}</span>${ref}${change}<span>found ${esc(ago(l.foundAt))}</span>${freshTxt}${ceilingNote}${radiusNote}${lnote}${ckNote}</div>
+    <div class="meta">${photos}${unv}${outPill}${tb}${ckLabel}${isAll()?`<span>${esc(s.name)}</span>`:""}<span>${esc(site(l.source).name)}</span>${l.miles?`<span class="num">${miles(l.miles)}</span>`:""}<span>${esc(l.location||"")}</span>${distTxt}${ship}<span>${esc(l.seller||"")}${l.sellerType?` (${esc(l.sellerType)})`:""}</span>${ref}${change}<span>found ${esc(ago(l.foundAt))}</span>${freshTxt}${outNote}${radiusNote}${lnote}${ckNote}</div>
   </article>`;
 }
 
 /* --- results: list, chips, counts and the deal strip; called on every filter change --- */
 function renderResults(){
   const rows=lastRows=scopeRows();
-  const shown=rows.filter(r=>passes(r,null)).sort((a,b)=>(a.st==="gone"?1:0)-(b.st==="gone"?1:0) || SORTFN[F.sort](a,b));
+  const sink=r=>r.st==="gone"?2:r.st==="outside"?1:0;
+  const shown=rows.filter(r=>passes(r,null)).sort((a,b)=>sink(a)-sink(b) || SORTFN[F.sort](a,b));
   renderChips(shown.length);
   updateCounts(rows);
   renderStrip(rows);
@@ -1145,7 +1180,7 @@ function renderSubline(){
   if(isAll()){ el.innerHTML=""; el.hidden=true; return; }
   el.hidden=false;
   const m=MK.get(s.id)||marketFor(s), thr=num(s.dealPct)??RULES.dealPctDefault, run=lastRunFor(s.id);
-  const one=`${s.pricing==="per-item"?`${thr}% under fair used`:m.value?`${thr}% under ${money(m.value)}`:`${thr}% under the median, once listings come in`}${s.maxPrice?` · under ${money(s.maxPrice)}`:""}${s.zip?` · near you within ${esc(s.radiusMi??"any")} mi`:""}${run?` · last run ${esc(ago(run.at))}`:""}`;
+  const one=`${s.pricing==="per-item"?`${thr}% under fair used`:m.value?`${thr}% under ${money(m.value)}`:`${thr}% under the median, once listings come in`}${s.maxPrice?` · under ${money(s.maxPrice)}`:""}${yearSpan(s)?` · ${yearSpan(s)}`:""}${num(s.maxMiles)!=null?` · up to ${miles(s.maxMiles)}`:""}${s.zip?` · near you within ${esc(s.radiusMi??"any")} mi`:""}${run?` · last run ${esc(ago(run.at))}`:""}`;
   el.innerHTML=`<span>${one}</span><button type="button" class="linkbtn" data-panel="details" aria-expanded="${openPanel==="details"}" aria-controls="summary">Search details</button>${canWrite?`<button type="button" class="linkbtn" data-panel="paste" aria-expanded="${openPanel==="paste"}" aria-controls="paste">Add listings by hand</button>`:""}`;
 }
 function renderListings(){
@@ -1159,14 +1194,14 @@ function renderListings(){
   if(s) $("pasteGo").textContent=`Add to ${s.name}`;
   $("lgrid").hidden=!ss.length;
   if(!ss.length){ $("dealStrip").hidden=true; $("listHead").textContent=!searchesLoaded?"Loading your listings…":searches.length?"Every search is paused.":"No searches yet."; return; }
-  const rows=scopeRows(), open=rows.filter(r=>r.st!=="gone" && r.st!=="passed");
+  const rows=scopeRows(), open=rows.filter(r=>r.st!=="gone" && r.st!=="passed" && r.st!=="outside");
   const nd=open.filter(r=>r.ds==="deal").length;
   $("listHead").textContent = isAll()
     ? `${nd} checked deal${nd===1?"":"s"} across ${ss.length} search${ss.length===1?"":"es"}, ${open.length.toLocaleString("en-US")} open listings.`
     : `${s.name}: ${nd} checked deal${nd===1?"":"s"} in ${open.length.toLocaleString("en-US")} open listings.`;
   const live=rows.filter(r=>r.st!=="gone"), has=k=>live.length>0 && live.filter(r=>num(r.l[k])!=null).length>=live.length/2;
   fieldOn={year:has("year"), miles:has("miles")};
-  const key=[selected, healthLoaded, fieldOn.year, fieldOn.miles, [...new Set(rows.map(r=>r.l.source))].sort().join(","), homeZip(), current()?.radiusMi].join("|");
+  const key=[selected, healthLoaded, fieldOn.year, fieldOn.miles, [...new Set(rows.map(r=>r.l.source))].sort().join(","), homeZip(), ...["radiusMi","minYear","maxYear","maxMiles","maxPrice"].map(k=>current()?.[k])].join("|");
   if(key!==panelKey){ panelKey=key; buildPanel(rows); }
   $("fsort").innerHTML=SORTS.map(([v,t])=>`<option value="${v}">${t}</option>`).join(""); $("fsort").value=F.sort;
   if(document.activeElement!==$("q")) $("q").value=F.q;
@@ -1207,6 +1242,7 @@ $("fpanel").addEventListener("input",e=>{
 $("fpanel").addEventListener("click",e=>{
   const a=e.target.closest("[data-act]"); if(!a) return;
   if(a.dataset.act==="close") setSheet(false);
+  if(a.dataset.act==="edit"){ const s=current(); setSheet(false); if(s && canWrite) openEditor(s); }
   if(a.dataset.act==="clear"){ clearFilters(); syncPanel(); changed(); }
 });
 $("fopen").onclick=()=>setSheet(!$("fpanel").classList.contains("open"));
@@ -1563,6 +1599,19 @@ function openEditor(s){
   $("overlay").hidden=false; $("e_name").focus();
 }
 function closeEditor(){ $("overlay").hidden=true; editingId=null; }
+// Which of a search's listings are open and which its limits hide, so a save can say what it moved (v2.5).
+function limitSplit(sid){
+  const s=searches.find(x=>x.id===sid), open=new Set(), hidden=new Set(); if(!s) return {open, hidden};
+  listings.forEach(l=>{ if(l.searchId!==sid || l.gone || l.status==="passed") return; const sc=score(l,s); if(probablyGone(l,s,sc)!=null) return; (outsideHidden(l,sc)?hidden:open).add(l.id); });
+  return {open, hidden};
+}
+function savedNote(before, after){
+  const out=[...before.open].filter(id=>after.hidden.has(id)).length, back=[...before.hidden].filter(id=>after.open.has(id)).length, n=k=>`${k} listing${k===1?"":"s"}`;
+  if(out && back) return `Search saved. ${n(out)} left the list for Outside search, ${n(back)} came back.`;
+  if(out) return `Search saved. ${n(out)} outside its limits moved to Status: Outside search.`;
+  if(back) return `Search saved. ${n(back)} back in the list.`;
+  return "Search saved";
+}
 $("e_cancel").onclick=closeEditor;
 $("overlay").addEventListener("click",e=>{ if(e.target.id==="overlay") closeEditor(); });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && !$("overlay").hidden) closeEditor(); });
@@ -1579,10 +1628,12 @@ $("editor").addEventListener("submit", async e=>{
     alerts:$("e_alerts").value, allowBranded:$("e_branded").value==="true", active:$("e_active").value==="true", notes:$("e_notes").value.trim(),
     updatedAt:new Date().toISOString() };
   $("e_save").disabled=true;
+  const sid=editingId, before=limitSplit(sid);
+  let note="Search saved";
   try{
-    if(editingId){ await db.collection("searches").doc(editingId).update(body); }
+    if(editingId){ await db.collection("searches").doc(editingId).update(body); refreshMarkets(); note=savedNote(before, limitSplit(sid)); }
     else { const id=(body.name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"search")+"-"+Math.random().toString(36).slice(2,6); await db.collection("searches").doc(id).set({...body, mustHave:[], createdAt:body.updatedAt}); selected=id; try{localStorage.setItem("ds.sel",id)}catch(e){} }
-    closeEditor(); toast("Search saved");
+    closeEditor(); toast(note, note.length>20?6000:2400);
   }catch(err){ toast(err?.code==="quota_exceeded"?"Storage is full. Delete old listings first.":"Couldn't save the search. Check the fields and try again."); }
   finally{ $("e_save").disabled=false; }
 });
