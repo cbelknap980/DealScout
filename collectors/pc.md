@@ -23,7 +23,7 @@ Deal Scout's shared rules are in `dealscout-data/rules.json`. Before anything el
 
 - Browser: load the built-in browser tools in one ToolSearch call with query "mcp__remote-devices__Claude_Browser__" and max_results 64. preview_start opens a tab and returns a tabId; navigate loads a URL in it; get_page_text and read_page read the page; javascript_tool runs page JavaScript and returns the last expression (use it to pull cards and image URLs out of the DOM, and to fetch more pages of the same site with fetch(url,{credentials:"include"}) + DOMParser); computer with action "screenshot" or "zoom" shows you what the tab displays; tabs_context says whether the browser pane is displayed or hidden; tabs_close closes your tabs. If a tool says a site isn't allowed yet, call request_access for that site with scope "site" once, wait, retry once, and if it is still refused write that site's route as "setup" with the note "Approve <site> for the Claude app's browser on your PC" and move on.
 - If the browser tools are missing or can't reach the PC: write one run record per active search with note "rules v1.4: PC offline; no browser", commit, and finish. Don't try anything else.
-- Gmail: load send_message with ToolSearch "+Gmail send_message" when you have a deal to email.
+- Gmail: when you have a deal to email, load send_message, get_message and trash_message in one ToolSearch call: "select:mcp__Gmail__send_message,mcp__Gmail__get_message,mcp__Gmail__trash_message" (if that finds nothing, search "+Gmail send_message").
 - The Agent tool for Check 3 (independent second look), when you have it.
 - No TinyFish or other paid service (rules.json numbers.photoBackup is "off").
 - Coordinates and distances: `ds zip <zip>`, `ds city "<City, ST>"`, `ds dist <lat> <lng> --zip <search zip>`.
@@ -69,7 +69,7 @@ Each search has a kind (`ds summary` prints it with the search's limits). For a 
 
 8. Apply MATCHING, TITLE AND CONDITION CHECK, STORING (`ds upsert`, `ds commit` after every 25 changed listings), GONE LISTINGS and DEAL SCORING exactly as the rules record says (`ds score <searchId>` shows market and deal status).
 
-9. DEAL EMAILS (rules.json DEAL EMAILS; you are the only collector that sends them). After step 6, run `ds score <searchId>` for each search. For every listing marked DEAL that has no alertedAt: re-open its ad right before sending and confirm it is still listed at that price (drop anything gone or changed, and update it). Send one email per search per run to settings.json dealEmailTo, in the format the rules give, with the page link settings.json appUrl. Then `ds alerted <id>` for each listing in it and commit. Never email site problems.
+9. DEAL EMAILS (rules.json DEAL EMAILS; you are the only collector that sends them). After step 6, run `ds score <searchId>` for each search. For every listing marked DEAL that has no alertedAt: re-open its ad right before sending and confirm it is still listed at that price (drop anything gone or changed, and update it). Send one email per search per run to settings.json dealEmailTo, in the format the rules give, with the page link settings.json appUrl. Right after each send, move your Sent copy of that one email to Trash as DEAL EMAILS (SENT COPY) says: only that message id, only when it is in Sent and not in the inbox, never anything else. Then `ds alerted <id>` for each listing in it and commit. Never email site problems.
 
 ## HEALTH AND RUN RECORDS
 

@@ -1,7 +1,7 @@
 {
  "title": "Two collectors and the page share one private data repo and one rules record",
- "version": "2.6",
- "builtFrom": "index.html + js/github-db.js, collectors/cloud.md and pc.md, tools/ds.py and rules.json v1.7, as of Nov 20",
+ "version": "2.6.1",
+ "builtFrom": "index.html + js/github-db.js, collectors/cloud.md and pc.md, tools/ds.py and rules.json v1.8, as of Nov 20",
  "updatedAt": "2026-11-20",
  "columns": [
   {
@@ -341,22 +341,24 @@
    "kind": "output",
    "name": "Deal email",
    "summary": "Checked deals only, from the PC collector",
-   "does": "One email per run listing new deals that passed every required check, with what the check covered and a link to the ad and the page. Site problems are never emailed; they show as the banner on the page.",
-   "code": "Gmail connector; rules.json DEAL EMAILS",
+   "does": "One email per run listing new deals that passed every required check, with what the check covered and a link to the ad and the page. Sent from the Gmail connector's account to settings.json dealEmailTo, where Cameron's own Gmail filter files it out of the inbox; the sending account's Sent copy goes to Trash right after. Site problems are never emailed; they show as the banner on the page.",
+   "code": "Gmail connector (send_message, then get_message + trash_message on the Sent copy); rules.json DEAL EMAILS",
    "reads": [
     "settings.json (dealEmailTo)"
    ],
    "writes": [],
    "rules": [
     "Re-open every ad right before sending; drop anything gone or changed",
-    "Never email a site problem"
+    "Never email a site problem",
+    "Trash only the Sent copy of the email just sent, never anything else"
    ],
    "keywords": [
     "email",
     "gmail",
     "alert",
     "deal email",
-    "inbox"
+    "inbox",
+    "sent"
    ]
   },
   {
