@@ -463,7 +463,7 @@ body.sheet-open{overflow:hidden}
           <span class="note" id="connBeat"></span>
         </div>
         <div class="table-wrap"><table class="sites" id="allSites"></table></div>
-        <p class="note">A site counts as connected only when a collector read it successfully in the last <span data-rule="connectedHours">13</span> hours, so a stopped collector or a PC that's off shows up here on its own.</p>
+        <p class="note">A site counts as connected only when a collector read it successfully in the last <span data-rule="connectedHours">36</span> hours, so a stopped collector or a PC that's off shows up here on its own.</p>
       </section>
     </section>
 
@@ -477,7 +477,7 @@ body.sheet-open{overflow:hidden}
       </div>
       <div class="cards" id="checkCards">
         <div class="card"><div class="n">01</div><h3>Read the ad itself</h3><p>Every listing is opened before it's shown: price, condition, title or paperwork, seller and availability come from the live ad. Until then it's marked unverified.</p></div>
-        <div class="card"><div class="n">02</div><h3>Keep the price current</h3><p>Open listings are reopened at least twice a day. Price cuts, sold ads and changed details are recorded, and a deal needs its price confirmed within 24 hours.</p></div>
+        <div class="card"><div class="n">02</div><h3>Keep the price current</h3><p>Open listings are reopened once a day. Price cuts, sold ads and changed details are recorded, and a deal needs its price confirmed within 36 hours.</p></div>
         <div class="card"><div class="n">03</div><h3>Photos and red flags</h3><p>Anything priced like a deal gets every photo reviewed, a scan for scam language, a search for the same ad elsewhere, and a VIN or serial check against the item's own format.</p></div>
         <div class="card"><div class="n">04</div><h3>A second look when it's very cheap</h3><p>35% or more under, or 25% under from a private seller: an independent review that hasn't seen the first verdict, then the ad is reopened. Both have to pass.</p></div>
         <div class="card"><div class="n">05</div><h3>Once more before any email</h3><p>Right before a deal email goes out, each ad is reopened to confirm it's still listed at that price. Sold or changed ads are dropped or re-scored.</p></div>
@@ -607,7 +607,7 @@ const SITE_DEFAULTS = {
 const HOW = {cloud:"Read from the cloud", pc:"Read by the Claude app on your PC"};
 /* ---------- shared rules: fallbacks below, overridden by the meta/rules document (numbers + display) ---------- */
 const RULES = {
-  dealPctDefault:15, exceptionalPct:35, exceptionalPrivatePct:25, priceFreshHours:24, connectedHours:13, recheckCheckDays:7, probablyGoneDays:7,
+  dealPctDefault:15, exceptionalPct:35, exceptionalPrivatePct:25, priceFreshHours:36, connectedHours:36, recheckCheckDays:7, probablyGoneDays:7,
   defaultMustHave:["fbmarketplace","craigslist","cycletrader","ebay"],
   brandedWords:["rebuilt","salvage","reconstructed","flood","lemon","junk","bonded"]
 };

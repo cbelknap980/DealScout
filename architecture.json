@@ -1,8 +1,8 @@
 {
  "title": "Two collectors and the page share one private data repo and one rules record",
- "version": "2.6.1",
- "builtFrom": "index.html + js/github-db.js, collectors/cloud.md and pc.md, tools/ds.py and rules.json v1.8, as of Nov 20",
- "updatedAt": "2026-11-20",
+ "version": "2.6.2",
+ "builtFrom": "index.html + js/github-db.js, collectors/cloud.md and pc.md, tools/ds.py and rules.json v1.8.1, as of Nov 21",
+ "updatedAt": "2026-11-21",
  "columns": [
   {
    "id": "inputs",
@@ -151,7 +151,7 @@
    "order": 1,
    "kind": "job",
    "name": "Cloud collector",
-   "summary": "4x daily, Opus 5.5, web fetch and web search, never emails",
+   "summary": "Once daily at 6:06 pm MT, Opus 5.5, web fetch and web search, never emails",
    "does": "A scheduled task that clones both repos, reads rules.json, then reads every cloud site, opening refused pages through a web-search result first and flagging a site for the PC after 3 refused runs; sets up quick searches, site plans and what-to-verify notes; reads each ad (check 1); marks deal-priced ads \"Waiting for the PC photo check\"; refreshes prices; writes its own cloud route on each site and one run record per search; pushes through ds.py.",
    "code": "collectors/cloud.md (scheduled task 'Deal Scout: cloud collector' just points to it)",
    "live": {
@@ -194,7 +194,7 @@
    "order": 2,
    "kind": "job",
    "name": "PC collector",
-   "summary": "4x daily, Opus 5.5, Claude app browser on the PC, sends deal emails",
+   "summary": "Once daily at 8:36 pm MT (after the cloud run), Opus 5.5, Claude app browser on the PC, sends deal emails",
    "does": "A scheduled task that runs with Cameron's PC linked. Reads Facebook, Cycle Trader, eBay, the nationwide Craigslist searches and Powder7 in the Claude app's browser; reviews the photos of every deal-priced ad from any site, biggest discount first, up to 8 a run (settled caution verdicts wait for a price change or 7 days) by opening each image and taking a screenshot (needs the Claude window visible; otherwise the check waits); runs the independent second look for exceptional deals; confirms price and availability on the ad; then sends the deal email. Writes its own pc route and run records.",
    "code": "collectors/pc.md (scheduled task 'Deal Scout: PC collector' just points to it)",
    "live": {
