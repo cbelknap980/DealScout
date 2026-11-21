@@ -1,7 +1,7 @@
 {
  "title": "Two collectors and the page share one private data repo and one rules record",
- "version": "2.6.2",
- "builtFrom": "index.html + js/github-db.js, collectors/cloud.md and pc.md, tools/ds.py and rules.json v1.8.1, as of Nov 21",
+ "version": "2.7",
+ "builtFrom": "index.html + js/github-db.js, collectors/cloud.md and pc.md, tools/ds.py and rules.json v1.9, as of Nov 21",
  "updatedAt": "2026-11-21",
  "columns": [
   {
@@ -115,9 +115,9 @@
    "order": 4,
    "kind": "input",
    "name": "Cameron",
-   "summary": "Quick search, search editor, paste box, listing status",
-   "does": "Cameron adds or edits searches, pastes links from anywhere, and marks listings watching, contacted or passed. The page saves each of these straight to the data repo with his GitHub token. Each search has a kind (Vehicle, Skis or Something else), picked in the quick box or the editor, and the kind decides which fields the editor shows. The editor's limits decide which listings belong in the search, on every device: year range, max miles, price ceiling and ship rule, and for skis the wanted models, length, underfoot and bindings.",
-   "code": "index.html: parseQuick(), parseSkiQuick(), guessKind(), openEditor(), renderKindFields(), parseLine(), status select in renderList()",
+   "summary": "Quick search, search editor, Searches tab (on or off, how often), paste box, listing status",
+   "does": "Cameron adds or edits searches, pastes links from anywhere, and marks listings watching, contacted or passed. The page saves each of these straight to the data repo with his GitHub token. Each search has a kind (Vehicle, Skis or Something else), picked in the quick box or the editor, and the kind decides which fields the editor shows. The editor's limits decide which listings belong in the search, on every device: year range, max miles, price ceiling and ship rule, and for skis the wanted models, length, underfoot and bindings. On the Searches tab he turns each search on or off and picks how often it runs (every day, every 2 or 3 days, once a week); turning one on starts it at the next collector run, and a search that is off keeps its listings but nothing is read, refreshed, checked or emailed for it.",
+   "code": "index.html: parseQuick(), parseSkiQuick(), guessKind(), openEditor(), renderKindFields(), parseLine(), status select in renderList(), renderSearches(), setSearchOn(), setSearchEvery()",
    "reads": [],
    "writes": [
     "searches.json",
@@ -127,7 +127,8 @@
    "rules": [
     "The page writes only its own files: searches.json, pasted.json, status.json",
     "A search's own limits come before the sidebar filters, which only narrow inside them",
-    "A search's kind comes from rules.json kinds; a free-form filter builder was left out on purpose, since every filter needs collector instructions"
+    "A search's kind comes from rules.json kinds; a free-form filter builder was left out on purpose, since every filter needs collector instructions",
+    "Collectors never change a search's on/off switch or frequency (active, everyDays, activeSince); ds.py refuses"
    ],
    "keywords": [
     "quick search",
@@ -142,8 +143,17 @@
     "models",
     "length",
     "underfoot",
-    "bindings"
-   ]
+    "bindings",
+    "on",
+    "off",
+    "frequency",
+    "how often",
+    "schedule",
+    "searches tab"
+   ],
+   "live": {
+    "type": "searches"
+   }
   },
   {
    "id": "job-cloud",
@@ -151,8 +161,8 @@
    "order": 1,
    "kind": "job",
    "name": "Cloud collector",
-   "summary": "Once daily at 6:06 pm MT, Opus 5.5, web fetch and web search, never emails",
-   "does": "A scheduled task that clones both repos, reads rules.json, then reads every cloud site, opening refused pages through a web-search result first and flagging a site for the PC after 3 refused runs; sets up quick searches, site plans and what-to-verify notes; reads each ad (check 1); marks deal-priced ads \"Waiting for the PC photo check\"; refreshes prices; writes its own cloud route on each site and one run record per search; pushes through ds.py.",
+   "summary": "Fires 12:06 and 6:06 am/pm MT and works only the searches that are on and due (an every-day search runs at 6:06 pm), Opus 5.5, web fetch and web search, never emails",
+   "does": "A scheduled task that clones both repos, reads rules.json, and works out which searches are due this run (on, and due by how often Cameron set them to run; ds due). It does nothing for the rest, and a run with nothing due stops right away. For each due search it reads every cloud site, opening refused pages through a web-search result first and flagging a site for the PC after 3 refused runs; sets up quick searches, site plans and what-to-verify notes; reads each ad (check 1); marks deal-priced ads \"Waiting for the PC photo check\"; refreshes prices; writes its own cloud route on each site it read and one run record per due search; pushes through ds.py. Pasted links are read whatever their search's schedule.",
    "code": "collectors/cloud.md (scheduled task 'Deal Scout: cloud collector' just points to it)",
    "live": {
     "type": "run",
@@ -175,7 +185,8 @@
    "rules": [
     "All sections of rules.json",
     "Never reviews photos and never emails: the PC does both",
-    "Records ski specs (brand, model, length, underfoot, bindings) on every ski listing and looks up maker underfoot specs, at most 10 a run"
+    "Records ski specs (brand, model, length, underfoot, bindings) on every ski listing and looks up maker underfoot specs, at most 10 a run",
+    "Works only searches that are on and due this run (rules.json SCHEDULE)"
    ],
    "keywords": [
     "cloud collector",
@@ -185,7 +196,10 @@
     "run",
     "webfetch",
     "search first",
-    "refused"
+    "refused",
+    "schedule",
+    "due",
+    "frequency"
    ]
   },
   {
@@ -194,8 +208,8 @@
    "order": 2,
    "kind": "job",
    "name": "PC collector",
-   "summary": "Once daily at 8:36 pm MT (after the cloud run), Opus 5.5, Claude app browser on the PC, sends deal emails",
-   "does": "A scheduled task that runs with Cameron's PC linked. Reads Facebook, Cycle Trader, eBay, the nationwide Craigslist searches and Powder7 in the Claude app's browser; reviews the photos of every deal-priced ad from any site, biggest discount first, up to 8 a run (settled caution verdicts wait for a price change or 7 days) by opening each image and taking a screenshot (needs the Claude window visible; otherwise the check waits); runs the independent second look for exceptional deals; confirms price and availability on the ad; then sends the deal email. Writes its own pc route and run records.",
+   "summary": "Once daily at 8:36 pm MT (after the cloud run), searches that are on and due, Opus 5.5, Claude app browser on the PC, sends deal emails",
+   "does": "A scheduled task that runs with Cameron's PC linked, for the searches that are on and due this run (ds due); a run with nothing due stops right away. Reads Facebook, Cycle Trader, eBay, the nationwide Craigslist searches and Powder7 in the Claude app's browser; reviews the photos of every deal-priced ad from any site, biggest discount first, up to 8 a run (settled caution verdicts wait for a price change or 7 days) by opening each image and taking a screenshot (needs the Claude window visible; otherwise the check waits); runs the independent second look for exceptional deals; confirms price and availability on the ad; then sends the deal email. Writes its own pc route and run records. A run with the PC offline is marked skipped, so its searches stay due for the next run.",
    "code": "collectors/pc.md (scheduled task 'Deal Scout: PC collector' just points to it)",
    "live": {
     "type": "run",
@@ -219,7 +233,8 @@
     "Photo checks happen only here (rules.json: LEGITIMACY CHECK)",
     "A blank screenshot leaves the check pending; never passed",
     "Records ski specs (brand, model, length, underfoot, bindings) on every ski listing and looks up maker underfoot specs, at most 10 a run",
-    "Named ski models are searched by name; Facebook gets at most 3 a run"
+    "Named ski models are searched by name; Facebook gets at most 3 a run",
+    "Works only searches that are on and due this run (rules.json SCHEDULE); no photo checks or deal emails for the others"
    ],
    "keywords": [
     "pc collector",
@@ -228,7 +243,10 @@
     "facebook",
     "email",
     "deal email",
-    "second look"
+    "second look",
+    "schedule",
+    "due",
+    "frequency"
    ]
   },
   {
@@ -238,7 +256,7 @@
    "kind": "rules",
    "name": "Rules (rules.json)",
    "summary": "One record both collectors and the page follow",
-   "does": "Deal Scout's shared rules: thresholds and windows in numbers, the rule wording the collectors follow in text, the Checks tab cards in display, and the item kinds (Vehicle, Skis, Something else) in kinds. A kind lists the fields collectors record for it, the sidebar filters and search limits it offers, its pricing default, and for skis the word lists used to read brand, model, length, underfoot and bindings from titles. Change a rule once here and every part picks it up on its next run or page load.",
+   "does": "Deal Scout's shared rules: thresholds and windows in numbers, the rule wording the collectors follow in text, the Checks tab cards in display, and the item kinds (Vehicle, Skis, Something else) in kinds. A kind lists the fields collectors record for it, the sidebar filters and search limits it offers, its pricing default, and for skis the word lists used to read brand, model, length, underfoot and bindings from titles. The schedule block sets when a search day starts (5 pm Denver time), the frequency choices and each collector's run times, which the page uses to show each search's next run. Change a rule once here and every part picks it up on its next run or page load.",
    "code": "dealscout-data/rules.json; page applyRulesDoc() and renderRules()",
    "live": {
     "type": "rules"
@@ -261,7 +279,9 @@
     "skis",
     "vehicle",
     "ship estimate",
-    "pickup first"
+    "pickup first",
+    "schedule",
+    "search day"
    ]
   },
   {
@@ -271,7 +291,7 @@
    "kind": "service",
    "name": "ds.py data helper",
    "summary": "How collectors read and change the data",
-   "does": "A small Python script the collectors run for every read and write: summaries, scoring (the same logic as the page), the work queues (which listings to re-open this run and which need a photo check, in order), storing listings, checks, routes and runs. It records each change, and on push it replays them on the newest copy if the other collector pushed first, so nothing gets overwritten; a change that no longer applies is skipped and reported, and a replay cut off partway is redone on the next push. It also sets a blocked site's pause from the rules record. For ski searches it reads brand, model, length, underfoot and bindings from each listing's title and notes into specs, never overwriting what a collector sent, and `ds.py specs` backfills stored listings.",
+   "does": "A small Python script the collectors run for every read and write: summaries, which searches are due this run (worked out once at the start and kept for the run; no queue work, scores or run records for the others), scoring (the same logic as the page), the work queues (which listings to re-open this run and which need a photo check, in order), storing listings, checks, routes and runs. It records each change, and on push it replays them on the newest copy if the other collector pushed first, so nothing gets overwritten; a change that no longer applies is skipped and reported, and a replay cut off partway is redone on the next push. It also sets a blocked site's pause from the rules record. For ski searches it reads brand, model, length, underfoot and bindings from each listing's title and notes into specs, never overwriting what a collector sent, and `ds.py specs` backfills stored listings.",
    "code": "tools/ds.py",
    "reads": [
     "dealscout-data (all files)"
@@ -286,7 +306,8 @@
     "Works out which listings are probably gone (unseen 7 days while the site read fine) the same way the page does",
     "Leaves listings outside a search's limits out of deals, the median and the refresh queue, the same way the page does",
     "Applies ski length, underfoot, binding and named-model limits the same way the page does; an unknown value never puts a listing outside",
-    "Adds the $40 shipping estimate and the pickup-first order to scoring and the photo queue, the same way the page does"
+    "Adds the $40 shipping estimate and the pickup-first order to scoring and the photo queue, the same way the page does",
+    "Works out which searches are due the same way the page shows the next run, and notes on each route which due searches the read covered"
    ],
    "keywords": [
     "ds.py",
@@ -301,7 +322,10 @@
     "backlog",
     "specs",
     "skis",
-    "ship estimate"
+    "ship estimate",
+    "due",
+    "schedule",
+    "frequency"
    ]
   },
   {
@@ -368,8 +392,8 @@
    "kind": "page",
    "name": "Deal Scout page",
    "summary": "GitHub Pages site, your token per device",
-   "does": "The page at cbelknap980.github.io/DealScout. It reads the data repo with Cameron's GitHub token, re-checks every minute while open, and re-scores every listing in the browser with the rules record. It opens on Listings: checked deals as photo cards on top, then every listing with filters for deal state, price, distance, how you'd get it (pickup or ships), site, status and price drops, plus the search kind's own filters: year and miles for vehicles; brand, length, underfoot, binding type and brand, and women's for skis. Each row has Watch, Contacted and Pass. Sites, Checks and this diagram are the other tabs; Sites judges each site per search, from the routes that covered that search. A listing unseen for 7 days while its site read fine counts as probably gone and moves under Gone. A listing outside the search's own limits from Edit search (years, max miles, price ceiling, far away and not shipping when the search asks for that, or for skis a model, length, underfoot or binding it rules out) never counts as a deal and moves under Outside search unless you marked it; the filters only narrow inside those limits. In ski searches, pickup listings sort ahead of ship-in ones in Best deal, and ship-in skis with no shipping shown carry a $40 estimate in their price.",
-   "code": "index.html (score(), itemOutside(), specOutside(), siteStatus(), renderListings(), passes(), kindGroups(), specGroup(), renderResults(), renderSites(), renderChecks()); js/github-db.js (data layer)",
+   "does": "The page at cbelknap980.github.io/DealScout. It reads the data repo with Cameron's GitHub token, re-checks every minute while open, and re-scores every listing in the browser with the rules record. It opens on Listings: checked deals as photo cards on top, then every listing with filters for deal state, price, distance, how you'd get it (pickup or ships), site, status and price drops, plus the search kind's own filters: year and miles for vehicles; brand, length, underfoot, binding type and brand, and women's for skis. Each row has Watch, Contacted and Pass. Searches lists every search with an on/off switch, how often it runs, and when it last ran and runs next; searches that are off are greyed out on Listings too. Sites, Checks and this diagram are the other tabs; Sites judges each site per search, from the routes that covered that search. A listing unseen for 7 days while its site read fine counts as probably gone and moves under Gone. A listing outside the search's own limits from Edit search (years, max miles, price ceiling, far away and not shipping when the search asks for that, or for skis a model, length, underfoot or binding it rules out) never counts as a deal and moves under Outside search unless you marked it; the filters only narrow inside those limits. In ski searches, pickup listings sort ahead of ship-in ones in Best deal, and ship-in skis with no shipping shown carry a $40 estimate in their price.",
+   "code": "index.html (score(), itemOutside(), specOutside(), siteStatus(), renderListings(), passes(), kindGroups(), specGroup(), renderResults(), renderSearches(), nextRun(), renderSites(), renderChecks()); js/github-db.js (data layer)",
    "live": {
     "type": "page"
    },
@@ -385,7 +409,8 @@
    "rules": [
     "The token stays in the browser on each device; it can only reach dealscout-data",
     "Search limits leave a listing out of the open list and deals; years and miles also keep it out of the median",
-    "Ski filters treat a value the ad doesn't state as its own choice (Not stated or Include ones with no length listed), never as a mismatch"
+    "Ski filters treat a value the ad doesn't state as its own choice (Not stated or Include ones with no length listed), never as a mismatch",
+    "A search that runs every few days keeps its prices fresh and its sites connected until its next run (windows grow by the days between runs)"
    ],
    "keywords": [
     "page",
@@ -408,7 +433,12 @@
     "bindings",
     "pickup",
     "ship estimate",
-    "kind"
+    "kind",
+    "searches tab",
+    "on",
+    "off",
+    "how often",
+    "next run"
    ]
   }
  ],

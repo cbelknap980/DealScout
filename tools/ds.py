@@ -25,8 +25,9 @@ Commands (run `ds.py help` for the list):
   alerted <id> [iso]               record that a deal email went out
   route <cloud|pc> <site> '<json>' write your own connection route for a site
   site <id> '<json>'               add or update a site's facts (not routes)
-  search <id> '<json>'             update a search's fields
-  run '<json>'                     add a run record
+  search <id> '<json>'             update a search's fields (collectors never change active, everyDays, activeSince)
+  due [--for cloud|pc] [--json]    which searches this run works on: on, and due by their frequency
+  run '<json>'                     add a run record (only for a search that is due this run)
   unpaste <id>                     drop a pasted link once its listing is stored
   specs [<searchId>]               fill listing specs from titles (kinds with a title parser, e.g. skis)
   commit "<message>"               push everything recorded since the last commit
@@ -556,7 +557,9 @@ def score(l, s, market, nums):
     passed = chk.get("status") == "passed" and int(chk.get("level") or 0) >= need
     failed = chk.get("status") == "failed"
     confirmed = max([x for x in (l.get("lastChecked"), l.get("lastSeen"), chk.get("at")) if x] or [""])
-    fresh = hours_since(confirmed) <= nums.get("priceFreshHours", 24)
+    # v2.7: a search that runs every few days keeps its prices fresh until its next run (the window grows by the
+    # days between runs), so a checked deal doesn't drop to "being checked" on the days it isn't searched.
+    fresh = hours_since(confirmed) <= nums.get("priceFreshHours", 24) + cycle_hours(s)
     live = not l.get("gone")
     outside = item_outside(l, s)
     if ceiling is not None and cost is not None and cost > ceiling:
@@ -618,6 +621,158 @@ def probably_gone(l, sc, sites, nums):
     if not read or read < ev + timedelta(days=days):
         return None
     return int(age)
+
+
+# ---------------------------------------------------------------- schedule (v2.7, rules v1.9; mirrors the schedule code in index.html)
+# Each search has an on/off switch (active) and a frequency (everyDays: 1 = every day, 3 = every 3 days, 7 = weekly),
+# both Cameron's. Time is counted in search days: a search day runs from rules.json schedule.dayStartHour (17, 5 pm)
+# to the same hour the next day, in schedule.timezone (America/Denver), so the evening runs (cloud 6:06 pm, PC 8:36 pm)
+# open a new day and the cloud's overnight and daytime runs belong to the evening before. A search is due for a
+# collector when it is on and that collector has no counted run of it yet, or Cameron turned it on (activeSince)
+# after that collector's last run of it, or everyDays search days have passed since that run. A run record counts
+# unless it is marked skipped (PC offline, rules unreadable). Each collector keeps its own count, so a PC that was
+# off catches up on its next run. Due searches are worked out once per run and kept in .ds-due, so run records
+# written later in the same run don't change the answer.
+PLAN = ".ds-due"
+PLAN_HOURS = 4
+SKIP_NOTE = re.compile(r"PC offline|run skipped|rules record unreadable", re.I)
+
+
+def schedule_cfg(rules):
+    sc = (rules or {}).get("schedule") or {}
+    ds = num(sc.get("dayStartHour"))
+    runs = sc.get("runs") if isinstance(sc.get("runs"), dict) else {}
+    return {"tz": str(sc.get("timezone") or "America/Denver"), "dayStart": int(ds) if ds is not None else 17,
+            "runs": {k: [str(t) for t in (v if isinstance(v, list) else [v])] for k, v in runs.items()}}
+
+
+def _us_mountain_offset(dt):
+    """UTC offset in hours for America/Denver when zoneinfo has no tz database: MDT (-6) from the second Sunday
+    of March 2 am to the first Sunday of November 2 am, MST (-7) otherwise."""
+    y = dt.year
+    mar = datetime(y, 3, 8, tzinfo=timezone.utc)
+    start = mar + timedelta(days=(6 - mar.weekday()) % 7, hours=9)       # 2 am MST = 09:00 UTC
+    nov = datetime(y, 11, 1, tzinfo=timezone.utc)
+    end = nov + timedelta(days=(6 - nov.weekday()) % 7, hours=8)         # 2 am MDT = 08:00 UTC
+    return -6 if start <= dt < end else -7
+
+
+def to_local(dt, tzname):
+    try:
+        from zoneinfo import ZoneInfo
+        return dt.astimezone(ZoneInfo(tzname)).replace(tzinfo=None)
+    except Exception:
+        off = _us_mountain_offset(dt) if tzname in ("America/Denver", "US/Mountain", "MST7MDT") else 0
+        return (dt + timedelta(hours=off)).replace(tzinfo=None)
+
+
+def search_day(when, cfg):
+    """The search day (a date) an ISO time or aware datetime falls in."""
+    dt = when if isinstance(when, datetime) else parse_iso(when)
+    if not dt:
+        return None
+    return (to_local(dt, cfg["tz"]) - timedelta(hours=cfg["dayStart"])).date()
+
+
+def every_days(s):
+    n = num((s or {}).get("everyDays"))
+    return max(1, min(30, int(n))) if n else 1
+
+
+def cycle_hours(s):
+    """Extra hours a search that runs every few days gets on its freshness and connection windows."""
+    return (every_days(s) - 1) * 24
+
+
+def search_on(s):
+    return (s or {}).get("active") is not False
+
+
+def run_counts(r):
+    return not (r.get("skipped") is True or SKIP_NOTE.search(str(r.get("note") or "")))
+
+
+def last_run(runs, sid, collector=None):
+    best = None
+    for r in runs or []:
+        if r.get("searchId") != sid or (collector and r.get("collector") != collector) or not run_counts(r):
+            continue
+        if best is None or str(r.get("at") or "") > str(best.get("at") or ""):
+            best = r
+    return best
+
+
+def due_info(sid, s, runs, collector, cfg, now=None):
+    now = now or datetime.now(timezone.utc)
+    n = every_days(s)
+    out = {"on": search_on(s), "every": n, "due": False, "why": "", "last": None, "nextDay": None}
+    if not out["on"]:
+        out["why"] = "off"
+        return out
+    last = last_run(runs, sid, collector)
+    if not last:
+        out.update(due=True, why="first run" if not collector else f"no {collector} run of it yet")
+        return out
+    out["last"] = last.get("at")
+    since = s.get("activeSince")
+    d0, today = search_day(last.get("at"), cfg), search_day(now, cfg)
+    nxt = d0 + timedelta(days=n) if d0 else today
+    out["nextDay"] = nxt.isoformat() if nxt else None
+    every = "every day" if n == 1 else f"every {n} days"
+    t = parse_iso(last.get("at"))
+    when = to_local(t, cfg["tz"]).strftime("%a %b %d %I:%M %p").replace(" 0", " ") if t else "?"
+    if since and str(last.get("at") or "") < str(since):
+        out.update(due=True, why=f"turned on since its last run ({when})")
+    elif today and nxt and today >= nxt:
+        out.update(due=True, why=f"{every}, last run {when}")
+    else:
+        out["why"] = f"{every}, last run {when}; next due {nxt:%a %b %d} from {cfg['dayStart'] % 12 or 12} {'pm' if cfg['dayStart'] >= 12 else 'am'}".replace(" 0", " ")
+    return out
+
+
+def run_plan(st, who=None, fresh=False):
+    """This run's due searches for collector `who` (default: this collector). Worked out on the run's first
+    `ds summary` or `ds due` and kept in .ds-due for PLAN_HOURS; a build chat (no collector) gets it unsaved."""
+    who = who or COLLECTOR
+    p = st.path(PLAN)
+    if who and who == COLLECTOR and not fresh and os.path.exists(p):
+        try:
+            with open(p, encoding="utf-8") as f:
+                plan = json.load(f)
+            if plan.get("collector") == who and hours_since(plan.get("at") or "") < PLAN_HOURS:
+                return plan
+        except Exception:
+            pass
+    cfg = schedule_cfg(st.rules())
+    runs = st.runs()
+    info = {sid: due_info(sid, s, runs, who, cfg) for sid, s in st.searches().items()}
+    plan = {"at": now_iso(), "collector": who, "due": [sid for sid, i in info.items() if i["due"]], "info": info}
+    if who and who == COLLECTOR:
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(plan, f, indent=1)
+    return plan
+
+
+def scope_route(st, collector, site, route):
+    """A route covers only the searches this run read (v2.7): with no `searches`, ds fills in this run's due
+    searches that use the site whenever that is not all of them; a given list keeps only due searches. So a
+    search that is off or not due today never looks read, and its listings don't drift to probably gone."""
+    plan = run_plan(st, collector)
+    users = [sid for sid, s in st.searches().items() if site in (s.get("sources") or [])]
+    if isinstance(route.get("searches"), list):
+        route["searches"] = [x for x in route["searches"] if x in plan["due"]]
+    elif users:
+        due_users = [x for x in users if x in plan["due"]]
+        if set(due_users) != set(users):
+            route["searches"] = due_users
+    return route
+
+
+def schedule_line(sid, s, info):
+    if not info["on"]:
+        return "OFF"
+    every = "every day" if info["every"] == 1 else f"every {info['every']} days"
+    return f"on, {every}, " + ("DUE this run (" + info["why"] + ")" if info["due"] else "not due (" + info["why"] + ")")
 
 
 # ---------------------------------------------------------------- mutations (each is replayable)
@@ -829,6 +984,9 @@ def op_run(st, run, at):
             die(f"run: missing {f}")
     run.setdefault("at", at)
     run.setdefault("emailed", False)
+    # v2.7: a run that didn't search (PC offline, rules unreadable) is marked skipped, so the search stays due.
+    if SKIP_NOTE.search(str(run.get("note") or "")):
+        run.setdefault("skipped", True)
     stamp = run["at"][:16].replace(":", "")
     run.setdefault("id", f"{stamp}-{run['searchId']}-{run['collector']}")
     runs = [r for r in st.runs() if r.get("id") != run["id"]]
@@ -907,7 +1065,7 @@ def git(st, *args, check=True):
 def ensure_ignore(st):
     gi = st.path(".gitignore")
     lines = open(gi).read().splitlines() if os.path.exists(gi) else []
-    for want in (OPS, REPLAY, "*.tmp", ".ds-collector"):
+    for want in (OPS, REPLAY, "*.tmp", ".ds-collector", PLAN):
         if want not in lines:
             lines.append(want)
     with open(gi, "w") as f:
@@ -1034,6 +1192,10 @@ def cmd_summary(st):
     nums = r.get("numbers", {})
     L = st.all_listings()
     print(f"rules v{r.get('version')} · {len(st.searches())} searches · {len(L)} listings · {len(st.pasted())} pasted links")
+    plans = {COLLECTOR: run_plan(st)} if COLLECTOR else {c: run_plan(st, c) for c in ("cloud", "pc")}
+    for who, plan in plans.items():
+        print(f"\nTHIS RUN ({who}): " + (f"due: {', '.join(plan['due'])}" if plan["due"] else "NOTHING DUE: no search is on and due for this collector")
+              + "  (ds due shows why; work only on due searches)")
     for sid, s in st.searches().items():
         mine = {k: v for k, v in L.items() if v.get("searchId") == sid}
         mk = market_for(s, sid, L, nums)
@@ -1048,7 +1210,9 @@ def cmd_summary(st):
         deals = [x for x in scored if x[1]["isDeal"]]
         pend = [l for l in open_ if (l.get("check") or {}).get("status") == "pending"]
         stale = [l for l, sc in scored if refresh_due(l, sc, nums)[0]]
-        print(f"\n[{sid}] {s.get('name')} · kind {kind_key(s)} · {'active' if s.get('active') else 'PAUSED'} · sources {','.join(s.get('sources') or [])}")
+        sched = " · ".join(f"{who}: {schedule_line(sid, s, plan['info'].get(sid) or due_info(sid, s, st.runs(), who, schedule_cfg(r)))}" for who, plan in plans.items())
+        print(f"\n[{sid}] {s.get('name')} · kind {kind_key(s)} · sources {','.join(s.get('sources') or [])}")
+        print(f"  schedule: {sched}")
         lim = limits_text(s)
         if lim:
             print(f"  limits: {lim}")
@@ -1153,6 +1317,11 @@ def cmd_queue(st, argv):
         die("queue <searchId> refresh|photos [--for cloud|pc] [--all] [--json]")
     sid, kind = argv[0], argv[1]
     s = st.searches().get(sid) or die(f"no search {sid}")
+    # v2.7: a collector gets no work for a search that is off or not due this run.
+    nd = not_due_here(st, sid)
+    if nd:
+        print("[]" if "--json" in argv else f"(0: {sid} is {nd}; skip it this run)")
+        return
     nums = st.rules().get("numbers", {})
     L = st.all_listings()
     mk = market_for(s, sid, L, nums)
@@ -1204,8 +1373,42 @@ def cmd_queue(st, argv):
     print(f"({len(rows)} of {total} {'due for refresh' if kind == 'refresh' else 'needing photo checks or a price re-confirm'})")
 
 
+def cmd_due(st, argv):
+    """due [--for cloud|pc] [--json]: this run's plan. For a collector it is worked out once, at the run's start."""
+    who = argv[argv.index("--for") + 1] if "--for" in argv else COLLECTOR or None
+    if who not in (None, "cloud", "pc"):
+        die("due [--for cloud|pc] [--json]")
+    whos = [who] if who else ["cloud", "pc"]
+    plans = {w: run_plan(st, w) for w in whos}
+    if "--json" in argv:
+        print(json.dumps(plans[whos[0]] if len(whos) == 1 else plans, indent=1))
+        return
+    ss = st.searches()
+    for w, plan in plans.items():
+        print(f"{w} run, planned {plan['at']}:")
+        for sid, s in ss.items():
+            i = plan["info"].get(sid) or {}
+            print(f"  {sid:22} {schedule_line(sid, s, i) if i else '?'}" + (f" · last {w} run {str(i.get('last'))[:16]}" if i.get("last") else ""))
+        print(f"DUE THIS RUN ({w}): " + (" ".join(plan["due"]) if plan["due"] else "nothing. Read pasted links only, then finish without run records."))
+
+
+def not_due_here(st, sid):
+    """For a collector: why a search gets no work this run (off or not due), or None when it is due."""
+    if not COLLECTOR:
+        return None
+    plan = run_plan(st)
+    if sid in plan["due"]:
+        return None
+    why = (plan["info"].get(sid) or {}).get("why") or "not due"
+    return "off" if why == "off" else "not due this run: " + why
+
+
 def cmd_score(st, sid):
     s = st.searches().get(sid) or die(f"no search {sid}")
+    nd = not_due_here(st, sid)
+    if nd:
+        print(f"(0: {sid} is {nd}; no checks or deal emails for it this run)")
+        return
     nums = st.rules().get("numbers", {})
     L = st.all_listings()
     mk = market_for(s, sid, L, nums)
@@ -1297,13 +1500,31 @@ def dispatch(st, c, a):
     elif c == "alerted":
         record(st, "alerted", {"id": a[0], "when": a[1] if len(a) > 1 else None})
     elif c == "route":
-        record(st, "route", {"collector": a[0], "site": a[1], "route": parse_json_arg(a[2])})
+        route = parse_json_arg(a[2])
+        if COLLECTOR and a[0] == COLLECTOR and isinstance(route, dict):
+            route = scope_route(st, a[0], a[1], route)
+        record(st, "route", {"collector": a[0], "site": a[1], "route": route})
     elif c == "site":
         record(st, "site", {"site": a[0], "facts": parse_json_arg(a[1])})
     elif c == "search":
-        record(st, "search", {"id": a[0], "patch": parse_json_arg(a[1])})
+        patch = parse_json_arg(a[1])
+        if COLLECTOR and isinstance(patch, dict) and set(patch) & {"active", "everyDays", "activeSince"}:
+            die("search: active, everyDays and activeSince are Cameron's on/off switch and frequency; collectors never change them")
+        record(st, "search", {"id": a[0], "patch": patch})
     elif c == "run":
-        record(st, "run", {"run": parse_json_arg(a[0])})
+        run = parse_json_arg(a[0])
+        if COLLECTOR and isinstance(run, dict) and run.get("searchId"):
+            sid = run["searchId"]
+            if sid not in st.searches():
+                die(f"run: no search {sid}")
+            plan = run_plan(st)
+            exempt = run.get("skipped") is True or SKIP_NOTE.search(str(run.get("note") or "")) or re.match(r"\s*(rules v[\d.]+:\s*)?repeat start", str(run.get("note") or ""), re.I)
+            if sid not in plan["due"] and not exempt:
+                why = (plan["info"].get(sid) or {}).get("why") or "not due"
+                die(f"run: {sid} is {'off' if why == 'off' else 'not due this run (' + why + ')'}. Write run records only for the searches ds due lists, and don't search the others.")
+        record(st, "run", {"run": run})
+    elif c == "due":
+        cmd_due(st, a)
     elif c == "unpaste":
         record(st, "unpaste", {"id": a[0]})
     elif c == "specs":

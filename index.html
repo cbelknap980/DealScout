@@ -186,6 +186,36 @@ details.fold .body{display:grid;gap:10px;margin-top:12px}
 .kindpick button:hover{border-color:var(--ink)}
 .kindpick button[aria-pressed="true"]{background:var(--ink);color:var(--ink-fg);border-color:var(--ink)}
 
+/* searches tab (v2.7): one row per search with an on/off switch, how often it runs, last and next run */
+.srlist{display:grid;gap:10px}
+.sr{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 18px;align-items:center}
+.sr.off{background:var(--sunk)}
+.sr.off .srmain h3,.sr.off .srwhen{color:var(--muted)}
+.srmain{display:grid;gap:3px;min-width:0}
+.srmain h3{font-size:19px;line-height:1.3;overflow-wrap:anywhere}
+.srmain .kindtag{font-family:var(--body);font-size:13px;font-weight:600;color:var(--muted);margin-left:8px}
+.srwhen{font-size:14.5px;color:var(--fg)}
+.srwhen b{font-weight:700;color:var(--head)}
+.sr .note{font-size:13.5px}
+.srside{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:flex-end}
+.srfreq{display:flex;gap:8px;align-items:center;font-size:14px;font-weight:600;color:var(--muted)}
+.srfreq select{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:6px 9px}
+.srfreq select:disabled{opacity:.55}
+.sw{display:inline-flex;align-items:center;gap:9px;border:0;background:none;padding:4px 0;cursor:pointer;font-weight:700;font-size:14.5px;color:var(--muted);min-width:76px}
+.sw .track{width:44px;height:26px;border-radius:999px;background:var(--line);position:relative;flex:none;transition:background .15s}
+.sw .track::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(20,38,61,.25);transition:transform .15s}
+.sw[aria-checked="true"]{color:var(--good)}
+.sw[aria-checked="true"] .track{background:var(--good)}
+.sw[aria-checked="true"] .track::after{transform:translateX(18px)}
+.sw:disabled{cursor:default;opacity:.6}
+.seg .offtag{font-family:var(--mono);font-size:11px;font-weight:500;text-transform:lowercase;border:1px solid currentColor;border-radius:999px;padding:0 6px;opacity:.8}
+.subline .offnote{color:var(--warn);font-weight:600}
+@media (max-width:640px){
+  .sr{grid-template-columns:auto minmax(0,1fr);padding:14px}
+  .srside{grid-column:1/-1;justify-content:space-between;border-top:1px solid var(--line);padding-top:10px}
+  .srfreq select{font-size:16px}
+}
+
 /* editor */
 .overlay{position:fixed;inset:0;background:color-mix(in srgb,var(--fg) 45%,transparent);display:grid;place-items:start center;overflow:auto;z-index:20;
   padding:calc(24px + env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px))}
@@ -381,11 +411,12 @@ body.sheet-open{overflow:hidden}
         <div class="kicker">Cameron's collector · Front Range, nationwide when it ships</div>
         <h1>Deal Scout</h1>
       </div>
-      <p class="mast-note">Saved searches, the sites each one reads, and every listing checked on the ad itself before it counts. Collectors run every six hours from the cloud and from the Claude app on your PC, which also reviews the photos of every deal-priced ad.</p>
+      <p class="mast-note">Saved searches, the sites each one reads, and every listing checked on the ad itself before it counts. Collectors run in the evening from the cloud and from the Claude app on your PC, which also reviews the photos of every deal-priced ad. Each search runs as often as you set it on Searches.</p>
     </div>
     <div class="navrow">
       <nav class="tabs" role="tablist" aria-label="Sections">
-                <button class="tab" role="tab" id="tab-listings" data-tab="listings" aria-selected="true">Listings</button>
+        <button class="tab" role="tab" id="tab-listings" data-tab="listings" aria-selected="true">Listings</button>
+        <button class="tab" role="tab" id="tab-searches" data-tab="searches" aria-selected="false">Searches</button>
         <button class="tab" role="tab" id="tab-sites" data-tab="sites" aria-selected="false">Sites</button>
         <button class="tab" role="tab" id="tab-checks" data-tab="checks" aria-selected="false">Checks</button>
         <button class="tab" role="tab" id="tab-how" data-tab="how" aria-selected="false">How it works</button>
@@ -442,6 +473,18 @@ body.sheet-open{overflow:hidden}
           </section>
         </div>
       </div>
+    </section>
+
+    <!-- SEARCHES (v2.7): every search with its on/off switch and how often it runs -->
+    <section class="panel" id="p-searches" role="tabpanel" aria-labelledby="tab-searches" hidden>
+      <div class="intro">
+        <div class="eyebrow">Searches</div>
+        <h2 class="headline" id="srHead">Which searches are on.</h2>
+        <p class="lead" id="srLead">A search you turn on runs at the next collector run, then as often as you pick. Turning one off keeps its listings, but nothing is searched, refreshed, checked or emailed for it until you turn it back on.</p>
+      </div>
+      <div class="srlist" id="srList"></div>
+      <div class="row-actions"><button type="button" class="newbtn" id="srNew">+ New search</button></div>
+      <p class="note" id="srNote"></p>
     </section>
 
     <!-- SITES -->
@@ -569,11 +612,14 @@ body.sheet-open{overflow:hidden}
           <option value="off">No email</option>
         </select>
       </label>
-      <label class="f">Status
+      <label class="f">Searching
         <select id="e_active">
-          <option value="true">Active</option>
-          <option value="false">Paused</option>
+          <option value="true">On: runs on its schedule</option>
+          <option value="false">Off: nothing is searched</option>
         </select>
+      </label>
+      <label class="f">How often<span class="hint">Turning a search on starts it at the next collector run</span>
+        <select id="e_every"></select>
       </label>
     </div>
     <label class="f">Notes for the collector<span class="hint">Anything that decides a match, e.g. which models count</span><textarea id="e_notes" rows="3"></textarea></label>
@@ -612,8 +658,8 @@ const RULES = {
   brandedWords:["rebuilt","salvage","reconstructed","flood","lemon","junk","bonded"]
 };
 let RULES_DOC = null;
-const TABS = ["listings","sites","checks","how"];
-const PAGE_VERSION = "2.6";
+const TABS = ["listings","searches","sites","checks","how"];
+const PAGE_VERSION = "2.7";
 let ARCH = null, archState = "loading";
 const EMPTY = document.getElementById("empty").outerHTML;
 const $ = id => document.getElementById(id);
@@ -636,6 +682,76 @@ function site(id){ const d=health.find(h=>h.id===id)||{}; const b=SITE_DEFAULTS[
 function allSiteIds(){ return [...new Set([...Object.keys(SITE_DEFAULTS), ...health.map(h=>h.id), ...searches.flatMap(s=>s.sources||[])])]; }
 function mustFor(s){ const src=s.sources||[]; const m=(Array.isArray(s.mustHave)&&s.mustHave.length)?s.mustHave:RULES.defaultMustHave; return m.filter(id=>src.includes(id)); }
 function current(){ return searches.find(x=>x.id===selected) || searches.find(s=>s.active!==false) || searches[0] || null; }
+
+/* ---------- schedule (v2.7, rules v1.9; same as ds.py due_info()) ----------
+   Each search has an on/off switch (active) and how often it runs (everyDays: 1 every day, 3 every 3 days, 7 once a
+   week). Days are search days: from rules schedule.dayStartHour (5 pm) to 5 pm the next day, Denver time, so the
+   evening runs open a new day and the cloud's overnight and daytime runs belong to the evening before. A search is due
+   for a collector when it is on and that collector hasn't run it yet, or it was turned on (activeSince) after that
+   run, or everyDays search days have passed since. Runs marked skipped (PC offline) don't count. Off searches keep
+   their listings; nothing is read, refreshed, checked or emailed for them. */
+const SCHED_FALLBACK = {timezone:"America/Denver", dayStartHour:17, choices:[1,2,3,7], runs:{cloud:["00:06","06:06","12:06","18:06"], pc:["20:36"]}};
+let SCHED = SCHED_FALLBACK;
+const DAY = 864e5;
+function isOn(s){ return s?.active!==false; }
+function everyDays(s){ const n=num(s?.everyDays); return n ? Math.max(1, Math.min(30, Math.floor(n))) : 1; }
+function cycleHours(s){ return (everyDays(s)-1)*24; }
+function everyText(n){ return n===1 ? "Every day" : n===7 ? "Once a week" : n===14 ? "Every 2 weeks" : `Every ${n} days`; }
+const TZF = {};
+function tzParts(ms){
+  const tz=SCHED.timezone||"America/Denver";
+  try{ TZF[tz]=TZF[tz]||new Intl.DateTimeFormat("en-US",{timeZone:tz, year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", hourCycle:"h23"}); }
+  catch(e){ TZF[tz]=new Intl.DateTimeFormat("en-US",{year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", hourCycle:"h23"}); }
+  const o={}; TZF[tz].formatToParts(new Date(ms)).forEach(p=>{ o[p.type]=p.value; });
+  return Date.UTC(+o.year, +o.month-1, +o.day, (+o.hour)%24, +o.minute);
+}
+// Wall-clock time in the schedule's time zone, as if it were UTC, and back again.
+function wallMs(ms){ return tzParts(ms); }
+function fromWall(w){ let t=w-(wallMs(w)-w); t=w-(wallMs(t)-t); return t; }
+function searchDay(iso){ const t=new Date(iso||"").getTime(); if(isNaN(t)) return null; return Math.floor((wallMs(t)-(SCHED.dayStartHour??17)*36e5)/DAY); }
+const SKIP_NOTE=/PC offline|run skipped|rules record unreadable/i;
+function runCounts(r){ return !(r.skipped===true || SKIP_NOTE.test(String(r.note||""))); }
+function lastRunOf(sid, c){ let best=null; runs.forEach(r=>{ if(r.searchId!==sid || (c && r.collector!==c) || !runCounts(r)) return; if(!best || String(r.at||"")>String(best.at||"")) best=r; }); return best; }
+// The collectors a search uses: the cloud always (site plans, web search), the PC when one of its sites is read there.
+function collectorsOf(s){ const pc=(s.sources||[]).some(id=>site(id).how==="pc"); return pc?["cloud","pc"]:["cloud"]; }
+function dueDay(s, c, now){
+  const today=searchDay(new Date(now).toISOString()), last=lastRunOf(s.id, c);
+  if(!last || (s.activeSince && String(last.at||"")<String(s.activeSince))) return today;
+  const d0=searchDay(last.at); return d0==null ? today : Math.max(d0+everyDays(s), today);
+}
+// The next scheduled run that will search s: {at (ms), c, now (true when that run started within the last 90 min)}.
+function nextRun(s, now){
+  if(!isOn(s)) return null;
+  now=now||Date.now(); let best=null;
+  collectorsOf(s).forEach(c=>{
+    const times=(SCHED.runs||{})[c]||[]; if(!times.length) return;
+    for(let d=dueDay(s, c, now), k=0; k<3 && !(best && best.c===c); d++, k++){
+      const start=d*DAY+(SCHED.dayStartHour??17)*36e5;
+      const cands=times.map(t=>{ const m=String(t).match(/^(\d{1,2}):(\d{2})$/); if(!m) return null; const mins=((+m[1])*60 + (+m[2]) - (SCHED.dayStartHour??17)*60 + 1440) % 1440; return fromWall(start+mins*6e4); })
+        .filter(t=>t!=null && t>=now-90*6e4).sort((a,b)=>a-b);
+      if(cands.length){ const at=cands[0]; if(!best || at<best.at) best={at, c, now:at<=now}; break; }
+    }
+  });
+  return best;
+}
+// "today 6:06 pm", "tomorrow 12:06 am", "Tue Nov 24, 6:06 pm", in the schedule's time zone.
+function whenText(ms){
+  const tz=SCHED.timezone||"America/Denver", w=wallMs(ms), today=Math.floor(wallMs(Date.now())/DAY), d=Math.floor(w/DAY);
+  let time; try{ time=new Date(ms).toLocaleTimeString("en-US",{timeZone:tz, hour:"numeric", minute:"2-digit"}).toLowerCase(); }catch(e){ time=new Date(ms).toLocaleTimeString("en-US",{hour:"numeric", minute:"2-digit"}).toLowerCase(); }
+  if(d===today) return (new Date(w).getUTCHours()>=17?"tonight ":"today ")+time;
+  if(d===today+1) return "tomorrow "+time;
+  let day; try{ day=new Date(ms).toLocaleDateString("en-US",{timeZone:tz, weekday:"short", month:"short", day:"numeric"}); }catch(e){ day=new Date(ms).toLocaleDateString("en-US",{weekday:"short", month:"short", day:"numeric"}); }
+  return `${day}, ${time}`;
+}
+function lastRunAny(s){ return lastRunOf(s.id, null); }
+// One line about a search's schedule: "Every 3 days · last run 5 h ago · next Tue Nov 24, 6:06 pm".
+function schedText(s){
+  const last=lastRunAny(s), lastT=last?`last run ${ago(last.at)}`:"hasn't run yet";
+  if(!isOn(s)) return `Off · ${last?lastT:"never run"}`;
+  const nx=nextRun(s);
+  const nxT=!nx ? "" : nx.now ? "running now" : (!last || (s.activeSince && String(last.at||"")<String(s.activeSince))) ? `starts ${whenText(nx.at)}` : `next ${whenText(nx.at)}`;
+  return [everyText(everyDays(s)), lastT, nxT].filter(Boolean).join(" · ");
+}
 
 /* ---------- pricing ---------- */
 function median(arr){ if(!arr.length) return null; const a=[...arr].sort((x,y)=>x-y); const m=Math.floor(a.length/2); return a.length%2?a[m]:(a[m-1]+a[m])/2; }
@@ -789,7 +905,8 @@ function score(l, s){
   const checkPassed = chk.status==="passed" && Number(chk.level||0) >= needLevel;
   const checkFailed = chk.status==="failed";
   const confirmedAt = [l.lastChecked, l.lastSeen, chk.at].filter(Boolean).sort().pop();
-  const fresh = hoursSince(confirmedAt) <= RULES.priceFreshHours;
+  // v2.7: a search that runs every few days keeps its prices fresh until its next run.
+  const fresh = hoursSince(confirmedAt) <= RULES.priceFreshHours + cycleHours(s);
   const live = !l.gone;
   const outside = itemOutside(l, s);
   if(ceiling!=null && cost!=null && cost>ceiling) outside.push("price");
@@ -842,9 +959,15 @@ function routesOf(d, sid){
   if(!out.length && d.state && LEGACY[d.state]) out.push({key:"legacy", state:LEGACY[d.state], at:d.lastCheck, lastOk:d.lastOk, note:d.note, count:d.lastCount});
   return out.filter(r=>r.state!=="off" && covers(r, sid));
 }
+// v2.7: a site counts as connected for a search when a covering route read it within connectedHours plus the days
+// between that search's runs, so a search set to every 3 days doesn't show its sites as down on its days off.
+function connWindow(id, sid){
+  const ss=sid ? searches.filter(s=>s.id===sid) : searches.filter(s=>isOn(s) && (s.sources||[]).includes(id));
+  return RULES.connectedHours + Math.max(0, ...ss.map(cycleHours));
+}
 function siteStatus(id, sid){
-  const d=health.find(h=>h.id===id)||{id}; const routes=routesOf(d, sid);
-  const fresh=routes.filter(r=>hoursSince(r.at)<=RULES.connectedHours);
+  const d=health.find(h=>h.id===id)||{id}; const routes=routesOf(d, sid), win=connWindow(id, sid);
+  const fresh=routes.filter(r=>hoursSince(r.at)<=win);
   let level="down", reason=null, route=null;
   if((route=fresh.find(r=>r.state==="ok"))) level="ok";
   else if((route=fresh.find(r=>r.state==="partial"))) level="partial";
@@ -881,7 +1004,7 @@ function lastRunFor(id){ return runs.find(r=>r.searchId===id) || null; }
 function isAll(){ return selected==="all"; }
 function segHtml(withAll){
   const sel=withAll ? selected : current()?.id;
-  const pill=(id,name,deals,total,paused)=>`<button type="button" data-id="${esc(id)}" aria-pressed="${id===sel}" class="${paused?"paused":""}">${deals?'<span class="dot" title="Has checked deals"></span>':""}${esc(name)}<span class="count">${total}</span></button>`;
+  const pill=(id,name,deals,total,paused)=>`<button type="button" data-id="${esc(id)}" aria-pressed="${id===sel}" class="${paused?"paused":""}"${paused?' title="This search is off"':""}>${deals?'<span class="dot" title="Has checked deals"></span>':""}${esc(name)}${paused?'<span class="offtag">off</span>':""}<span class="count">${total}</span></button>`;
   const per=searches.map(s=>({s, deals:openOf(s).filter(l=>score(l,s).isDeal).length, total:listings.filter(l=>{ if(l.searchId!==s.id || l.gone) return false; const sc=score(l,s); return probablyGone(l,s,sc)==null && !outsideHidden(l,sc); }).length}));
   const act=per.filter(x=>x.s.active!==false);
   const all=(withAll && searches.length>1) ? pill("all","All searches", act.reduce((n,x)=>n+x.deals,0), act.reduce((n,x)=>n+x.total,0), false) : "";
@@ -896,7 +1019,7 @@ function renderConnBar(){
   if(!healthLoaded || tab!=="listings"){ bar.hidden=true; return; }
   // Each must-have site is judged for each search in scope; a site counts once, at its worst.
   const worst=new Map(), rank={down:0, partial:1, ok:2};
-  scopeSearches().forEach(s=>mustFor(s).forEach(id=>{ const x=siteStatus(id, s.id), w=worst.get(id); if(!w || rank[x.level]<rank[w.level]) worst.set(id, x); }));
+  scopeSearches().filter(isOn).forEach(s=>mustFor(s).forEach(id=>{ const x=siteStatus(id, s.id), w=worst.get(id); if(!w || rank[x.level]<rank[w.level]) worst.set(id, x); }));
   const must=[...worst.values()];
   const down=must.filter(x=>x.level==="down"), part=must.filter(x=>x.level==="partial");
   if(!down.length && !part.length){ bar.hidden=true; return; }
@@ -922,7 +1045,7 @@ function renderSites(){
     const st=order.map(id=>({...siteStatus(id, s.id), must:mustIds.includes(id), meta:site(id)}));
     const mustSt=st.filter(x=>x.must), okM=mustSt.filter(x=>x.level==="ok").length, downM=mustSt.filter(x=>x.level==="down").length, partM=mustSt.filter(x=>x.level==="partial");
     $("sitesEyebrow").textContent=`Sites · ${s.name}`;
-    $("sitesHead").textContent = !ids.length ? `No sites picked yet for ${s.name}.`
+    $("sitesHead").textContent = !isOn(s) ? `${s.name} is off, so its sites aren't being read.` : !ids.length ? `No sites picked yet for ${s.name}.`
       : downM ? `${downM} must-have site${downM===1?"":"s"} not connected for ${s.name}.` : partM.length ? `All ${mustSt.length} must-have sites connected for ${s.name}; ${partM.map(x=>x.name).join(", ")} only partly.` : `All ${mustSt.length} must-have sites connected for ${s.name}.`;
     $("sitesLead").textContent = (s.siteNotes ? s.siteNotes+" " : "") + "Each search reads its own sites. The collector picks them when a search starts and updates the list as sites come and go.";
     $("siteCards").innerHTML = st.map(x=>{
@@ -946,8 +1069,8 @@ function renderSites(){
   const all=allSiteIds().filter(id=>searches.some(s=>(s.sources||[]).includes(id)) || health.some(h=>h.id===id));
   $("allSites").innerHTML=`<thead><tr><th>Site</th><th>Status</th><th>Used by</th><th>Last read</th></tr></thead><tbody>${all.map(id=>{
     const x=siteStatus(id), [label,cls]=levelOf(x), users=searches.filter(s=>(s.sources||[]).includes(id)), used=users.map(s=>s.name);
-    const notFor=x.level==="ok" ? users.filter(s=>siteStatus(id, s.id).level!=="ok").map(s=>s.name) : [];
-    return `<tr><td><strong>${esc(site(id).name)}</strong><div class="note">${esc(site(id).kind||"")}</div></td><td><span class="st ${cls}">${esc(label)}</span>${notFor.length?`<div class="note">not for ${esc(notFor.join(", "))}</div>`:""}</td><td>${esc(used.join(", ")||"no search")}</td><td class="note">${esc(x.route.at?ago(x.route.at):"never")}</td></tr>`;}).join("")}</tbody>`;
+    const notFor=x.level==="ok" ? users.filter(s=>isOn(s) && siteStatus(id, s.id).level!=="ok").map(s=>s.name) : [];
+    return `<tr><td><strong>${esc(site(id).name)}</strong><div class="note">${esc(site(id).kind||"")}</div></td><td><span class="st ${cls}">${esc(label)}</span>${notFor.length?`<div class="note">not for ${esc(notFor.join(", "))}</div>`:""}</td><td>${users.length?users.map(s=>esc(s.name)+(isOn(s)?"":' <span class="muted">(off)</span>')).join(", "):"no search"}</td><td class="note">${esc(x.route.at?ago(x.route.at):"never")}</td></tr>`;}).join("")}</tbody>`;
 }
 
 /* ---------- shared rules (meta/rules) ---------- */
@@ -960,6 +1083,14 @@ function applyRulesDoc(doc){
   if(Array.isArray(n.brandedWords) && n.brandedWords.length){ try{ BRANDED = brandedRe(n.brandedWords); RULES.brandedWords = n.brandedWords.map(String); }catch(e){} }
   const k = RULES_DOC?.kinds;
   KINDS = (k && typeof k==="object" && Object.values(k).every(v=>v && typeof v==="object")) ? k : KINDS_FALLBACK;
+  // v2.7 schedule: time zone, when a search day starts, the frequency choices and each collector's run times.
+  const sc = RULES_DOC?.schedule, ok = sc && typeof sc==="object";
+  SCHED = {
+    timezone: ok && typeof sc.timezone==="string" ? sc.timezone : SCHED_FALLBACK.timezone,
+    dayStartHour: ok && num(sc.dayStartHour)!=null ? num(sc.dayStartHour) : SCHED_FALLBACK.dayStartHour,
+    choices: ok && Array.isArray(sc.choices) && sc.choices.every(x=>num(x)>=1) ? sc.choices.map(Number) : SCHED_FALLBACK.choices,
+    runs: ok && sc.runs && typeof sc.runs==="object" ? Object.fromEntries(Object.entries(sc.runs).map(([c,v])=>[c,(Array.isArray(v)?v:[v]).map(String)])) : SCHED_FALLBACK.runs
+  };
 }
 function renderRules(){
   document.querySelectorAll("[data-rule]").forEach(el=>{ const v=RULES[el.dataset.rule]; if(v!=null) el.textContent=v; });
@@ -974,6 +1105,58 @@ function renderRules(){
     rv.hidden=false;
   } else rv.hidden=true;
 }
+
+/* ---------- Searches (v2.7): turn each search on or off and pick how often it runs ---------- */
+const srBusy = new Set();
+function renderSearches(){
+  const on=searches.filter(isOn).length, n=searches.length;
+  $("srHead").textContent = !searchesLoaded ? "Loading your searches…" : !n ? "No searches yet." : on===n ? (n===1?"Your search is on.":`All ${n} searches are on.`) : !on ? "Every search is off." : `${on} of ${n} searches on.`;
+  const choices=[...new Set([...(SCHED.choices||[1,2,3,7]), ...searches.map(everyDays)])].sort((a,b)=>a-b);
+  $("srList").innerHTML = searches.map(s=>{
+    const o=isOn(s), kd=kindOf(s), open=openOf(s), deals=open.filter(l=>score(l,s).isDeal).length, busy=srBusy.has(s.id), dis=!canWrite||busy;
+    const counts=`${open.length.toLocaleString("en-US")} open listing${open.length===1?"":"s"}${deals?` · ${deals} checked deal${deals===1?"":"s"}`:""}`;
+    return `<div class="sr${o?"":" off"}" data-id="${esc(s.id)}">
+      <button type="button" class="sw" role="switch" aria-checked="${o}" data-sw="${esc(s.id)}" aria-label="${esc(s.name)} search"${dis?" disabled":""}><span class="track"></span><span>${o?"On":"Off"}</span></button>
+      <div class="srmain">
+        <h3>${esc(s.name||"Untitled")}<span class="kindtag">${esc(kd.label||"")}</span></h3>
+        <div class="srwhen">${esc(schedText(s))}</div>
+        <div class="note">${o?counts:`${counts}. Listings stay; prices aren't refreshed while it's off.`}</div>
+      </div>
+      <div class="srside">
+        <label class="srfreq">How often <select data-freq="${esc(s.id)}"${dis?" disabled":""} aria-label="How often ${esc(s.name)} runs">${choices.map(c=>`<option value="${c}"${c===everyDays(s)?" selected":""}>${esc(everyText(c))}</option>`).join("")}</select></label>
+        <button type="button" class="linkbtn" data-goto="${esc(s.id)}">Listings</button>${canWrite?`<button type="button" class="linkbtn" data-edit="${esc(s.id)}">Edit</button>`:""}
+      </div>
+    </div>`; }).join("") || (searchesLoaded?`<div class="empty"><strong>No saved searches yet.</strong><br>Start one with + New search.</div>`:"");
+  $("srNew").hidden=!canWrite;
+  const times=Object.entries(SCHED.runs||{}).map(([c,v])=>`${c==="pc"?"PC":"cloud"} ${v.map(t=>{ const m=String(t).match(/^(\d{1,2}):(\d{2})$/); if(!m) return t; const h=+m[1]; return `${h%12||12}:${m[2]} ${h<12?"am":"pm"}`; }).join(", ")}`).join("; ");
+  $("srNote").textContent = `A day here runs from ${((SCHED.dayStartHour??17)%12)||12} ${(SCHED.dayStartHour??17)<12?"am":"pm"} to ${((SCHED.dayStartHour??17)%12)||12} ${(SCHED.dayStartHour??17)<12?"am":"pm"}, Denver time, so "every day" means one cloud pass and one PC pass each evening. Collector runs: ${times}. A run that finds nothing due stops right away.`;
+}
+async function patchSearch(id, patch, okMsg, el){
+  if(!db || !canWrite){ toast("Saving isn't available in this view."); return false; }
+  const key=el ? (el.dataset.sw!=null ? "data-sw" : el.dataset.freq!=null ? "data-freq" : null) : null, focused=el && document.activeElement===el;
+  srBusy.add(id); if(el) el.disabled=true; if(tab==="searches") renderSearches();
+  try{ await db.collection("searches").doc(id).update({...patch, updatedAt:new Date().toISOString()}); toast(okMsg(), 5000); return true; }
+  catch(e){ toast("Couldn't save that change. Try again."); return false; }
+  finally{ srBusy.delete(id); render(); if(key && focused){ const n=[...document.querySelectorAll(`[${key}]`)].find(x=>x.getAttribute(key)===id); if(n) n.focus(); } }
+}
+function setSearchOn(id, on, el){
+  const s=searches.find(x=>x.id===id); if(!s) return;
+  const patch=on ? {active:true, activeSince:new Date().toISOString()} : {active:false};
+  return patchSearch(id, patch, ()=>{ const x=searches.find(y=>y.id===id)||s, nx=nextRun({...x, ...patch});
+    return on ? `${s.name} is on. It ${nx?(nx.now?"starts with the run going now":`starts ${whenText(nx.at)}`):"starts at the next collector run"}, then runs ${everyText(everyDays(x)).toLowerCase()}.` : `${s.name} is off. Its listings stay; nothing is searched for it.`; }, el);
+}
+function setSearchEvery(id, n, el){
+  const s=searches.find(x=>x.id===id); if(!s || everyDays(s)===n) return;
+  return patchSearch(id, {everyDays:n}, ()=>{ const x=searches.find(y=>y.id===id)||s, nx=isOn(x)?nextRun({...x, everyDays:n}):null;
+    return `${s.name} now runs ${everyText(n).toLowerCase()}.${nx?` Next: ${nx.now?"the run going now":whenText(nx.at)}.`:isOn(x)?"":" It's off, so nothing runs until you turn it on."}`; }, el);
+}
+$("srList").addEventListener("click",e=>{
+  const sw=e.target.closest("[data-sw]"); if(sw){ const s=searches.find(x=>x.id===sw.dataset.sw); if(s) setSearchOn(s.id, !isOn(s), sw); return; }
+  const g=e.target.closest("[data-goto]"); if(g){ selected=g.dataset.goto; try{localStorage.setItem("ds.sel",selected)}catch(err){} openPanel=null; setTab("listings"); return; }
+  const ed=e.target.closest("[data-edit]"); if(ed){ const s=searches.find(x=>x.id===ed.dataset.edit); if(s) openEditor(s); }
+});
+$("srList").addEventListener("change",e=>{ const f=e.target.closest("[data-freq]"); if(f) setSearchEvery(f.dataset.freq, Number(f.value), f); });
+$("srNew").onclick=()=>{ openPanel="new"; setTab("listings"); setTimeout(()=>$("quickText").focus(),50); };
 
 /* ---------- Checks ---------- */
 function renderChecks(){
@@ -1343,10 +1526,10 @@ function renderSummary(s){
   const shipTxt=kd.shipEstimate?` (${money(kd.shipEstimate)} estimated when the ad doesn't show it)`:"";
   const rule = s.pricing==="per-item" ? `${thr}% under each model's fair used price` : m.value ? `${thr}% under ${money(m.value)} (${esc(m.basis)}), so ${money(m.value*(1-thr/100))} or less` : `${thr}% under the median, once listings come in`;
   el.hidden=false;
-  el.innerHTML=`<div class="block-head"><div><span class="section-label">${esc(s.category||"Search")}${s.active===false?" · paused":""}</span><h2 class="block-title">${esc(s.name)}</h2></div>${canWrite?`<button class="btn" id="editSearch" type="button">Edit search</button>`:""}</div>
+  el.innerHTML=`<div class="block-head"><div><span class="section-label">${esc(s.category||"Search")}${isOn(s)?"":" · off"}</span><h2 class="block-title">${esc(s.name)}</h2></div>${canWrite?`<button class="btn" id="editSearch" type="button">Edit search</button>`:""}</div>
     <div class="cols">
       <div class="col"><dl class="terms"><dt>Keywords</dt><dd>${esc(s.keywords)}${s.exclude?`<span class="muted"> · not ${esc(s.exclude)}</span>`:""}</dd><dt>Deal rule</dt><dd>${rule}</dd><dt>Ceiling</dt><dd>${s.maxPrice?money(s.maxPrice):"none"}</dd>${kindRow}${yearsRow}</dl></div>
-      <div class="col"><dl class="terms"><dt>Area</dt><dd>${s.zip?`within ${esc(s.radiusMi??"any")} mi of ${esc(s.zip)} counts as near you${s.shipOutside?`; farther only if it ships, priced with shipping${shipTxt}`:""}${kd.nearFirst?"; pickup listings rank first":""}`:"nationwide"}</dd><dt>Sites</dt><dd>${(s.sources||[]).map(id=>esc(site(id).name)).join(", ")||"picked on the first run"}</dd><dt>Last run</dt><dd>${run?`${esc(ago(run.at))}: ${esc(run.note||"")}`:"not yet"}</dd></dl></div>
+      <div class="col"><dl class="terms"><dt>Area</dt><dd>${s.zip?`within ${esc(s.radiusMi??"any")} mi of ${esc(s.zip)} counts as near you${s.shipOutside?`; farther only if it ships, priced with shipping${shipTxt}`:""}${kd.nearFirst?"; pickup listings rank first":""}`:"nationwide"}</dd><dt>Sites</dt><dd>${(s.sources||[]).map(id=>esc(site(id).name)).join(", ")||"picked on the first run"}</dd><dt>Schedule</dt><dd>${esc(schedText(s))}</dd><dt>Last run</dt><dd>${run?`${esc(ago(run.at))}: ${esc(run.note||"")}`:"not yet"}</dd></dl></div>
     </div>`;
   const b=$("editSearch"); if(b) b.onclick=()=>openEditor(s);
 }
@@ -1357,8 +1540,9 @@ function renderSubline(){
   el.hidden=false;
   const m=MK.get(s.id)||marketFor(s), thr=num(s.dealPct)??RULES.dealPctDefault, run=lastRunFor(s.id);
   const kb=kindLimitBits(s).map(x=>` · ${esc(x)}`).join(""), kd=kindOf(s);
-  const one=`${s.pricing==="per-item"?`${thr}% under fair used`:m.value?`${thr}% under ${money(m.value)}`:`${thr}% under the median, once listings come in`}${s.maxPrice?` · under ${money(s.maxPrice)}`:""}${yearSpan(s)?` · ${yearSpan(s)}`:""}${num(s.maxMiles)!=null?` · up to ${miles(s.maxMiles)}`:""}${kb}${s.zip?` · near you within ${esc(s.radiusMi??"any")} mi${kd.nearFirst?", pickup first":""}`:""}${run?` · last run ${esc(ago(run.at))}`:""}`;
-  el.innerHTML=`<span>${one}</span><button type="button" class="linkbtn" data-panel="details" aria-expanded="${openPanel==="details"}" aria-controls="summary">Search details</button>${canWrite?`<button type="button" class="linkbtn" data-panel="paste" aria-expanded="${openPanel==="paste"}" aria-controls="paste">Add listings by hand</button>`:""}`;
+  const one=`${s.pricing==="per-item"?`${thr}% under fair used`:m.value?`${thr}% under ${money(m.value)}`:`${thr}% under the median, once listings come in`}${s.maxPrice?` · under ${money(s.maxPrice)}`:""}${yearSpan(s)?` · ${yearSpan(s)}`:""}${num(s.maxMiles)!=null?` · up to ${miles(s.maxMiles)}`:""}${kb}${s.zip?` · near you within ${esc(s.radiusMi??"any")} mi${kd.nearFirst?", pickup first":""}`:""}`;
+  const sched=isOn(s) ? `<span>${esc(schedText(s))}</span>` : `<span class="offnote">Off: nothing is searched or refreshed${run?`, last run ${esc(ago(run.at))}`:""}</span>${canWrite?`<button type="button" class="linkbtn" data-turnon="${esc(s.id)}">Turn it on</button>`:""}`;
+  el.innerHTML=`<span>${one}</span>${sched}<button type="button" class="linkbtn" data-panel="details" aria-expanded="${openPanel==="details"}" aria-controls="summary">Search details</button>${canWrite?`<button type="button" class="linkbtn" data-panel="paste" aria-expanded="${openPanel==="paste"}" aria-controls="paste">Add listings by hand</button>`:""}`;
 }
 function renderListings(){
   loadF();
@@ -1371,7 +1555,7 @@ function renderListings(){
   $("paste").hidden=!(openPanel==="paste" && s && !isAll() && canWrite);
   if(s) $("pasteGo").textContent=`Add to ${s.name}`;
   $("lgrid").hidden=!ss.length;
-  if(!ss.length){ $("dealStrip").hidden=true; $("listHead").textContent=!searchesLoaded?"Loading your listings…":searches.length?"Every search is paused.":"No searches yet."; return; }
+  if(!ss.length){ $("dealStrip").hidden=true; $("listHead").textContent=!searchesLoaded?"Loading your listings…":searches.length?"Every search is off. Turn one on in Searches.":"No searches yet."; return; }
   const rows=scopeRows(), open=rows.filter(r=>r.st!=="gone" && r.st!=="passed" && r.st!=="outside");
   const nd=open.filter(r=>r.ds==="deal").length;
   $("listHead").textContent = isAll()
@@ -1439,7 +1623,7 @@ document.addEventListener("click",e=>{
   if(c.dataset.chip==="all") clearFilters(); else { const x=CHIPS[Number(c.dataset.chip)]; if(x) x[1](); }
   syncPanel(); changed();
 });
-$("subline").addEventListener("click",e=>{ const b=e.target.closest("[data-panel]"); if(!b) return; openPanel=openPanel===b.dataset.panel?null:b.dataset.panel; renderListings(); });
+$("subline").addEventListener("click",e=>{ const on=e.target.closest("[data-turnon]"); if(on){ setSearchOn(on.dataset.turnon, true, on); return; } const b=e.target.closest("[data-panel]"); if(!b) return; openPanel=openPanel===b.dataset.panel?null:b.dataset.panel; renderListings(); });
 $("tNew").onclick=()=>{ openPanel=openPanel==="new"?null:"new"; renderListings(); if(openPanel==="new"){ if(!quickPicked) quickKind=guessKind($("quickText").value); renderQuickKind(); $("quickText").focus(); } };
 $("list").addEventListener("click",async e=>{
   const b=e.target.closest("button.act"); if(!b || !db || !canWrite) return;
@@ -1493,6 +1677,7 @@ function hwLive(n){
       return {text:`${c.ok} connected, ${c.partial} partial, ${c.down} down`};
     }
     case "rules": return {text: RULES_DOC ? `rules v${RULES_DOC.version||"?"}${monD(RULES_DOC.updatedAt)?", updated "+monD(RULES_DOC.updatedAt):""}` : "Using built-in fallbacks"};
+    case "searches": { const on=searches.filter(isOn); return {text: searches.length ? `${on.length} of ${searches.length} searches on${on.length?": "+on.map(s=>`${s.name} (${everyText(everyDays(s)).toLowerCase()})`).join(", "):""}` : "No searches yet"}; }
     case "db": return {text:`${searches.length} searches · ${listings.length} listings · ${runs.length} runs · ${health.length} sites`};
     case "page": return {text:`Page v${PAGE_VERSION}`};
     default: return null;
@@ -1689,11 +1874,12 @@ function render(){
   renderRules();
   renderConnBar();
   if(tab==="listings") renderListings();
+  if(tab==="searches") renderSearches();
   if(tab==="sites") renderSites();
   if(tab==="checks") renderChecks();
   if(tab==="how"){ try{ renderHow(); }catch(e){ ARCH=null; archState="missing"; try{ renderHow(); }catch(_){} } }
 }
-setInterval(()=>{ if(tab==="listings"||tab==="sites") render(); }, 5*60*1000);
+setInterval(()=>{ if(tab==="listings"||tab==="sites"||tab==="searches") render(); }, 5*60*1000);
 $("connBar").addEventListener("click",()=>setTab("sites"));
 
 /* ---------- quick add ---------- */
@@ -1748,7 +1934,7 @@ $("quick").addEventListener("submit", async e=>{
   const body={ name:p.keywords.replace(/\b\w/g,c=>c.toUpperCase()).slice(0,40), keywords:p.keywords, exclude:p.exclude.join(", "), category:kind==="skis"?"Skis":"",
     kind, maxPrice:p.maxPrice, marketPrice:null, dealPct:RULES.dealPctDefault, minYear:p.minYear, maxYear:p.maxYear, maxMiles:null,
     zip:ref.zip||"", radiusMi:150, shipOutside:true, areas:"denver, boulder, cosprings, fortcollins, rockies, westslope", extraUrls:[],
-    sources:[], mustHave:[], autoSites:true, pricing:kd.pricing==="per-item"?"per-item":null, alerts:"deals", active:true,
+    sources:[], mustHave:[], autoSites:true, pricing:kd.pricing==="per-item"?"per-item":null, alerts:"deals", active:true, everyDays:1, activeSince:now,
     notes:`Quick search typed by Cameron: "${text}". Kind: ${kd.label||kind}. Match whole items only, no parts or accessories. Collector: on the first run refine keywords, category and exclusions, pick the sites, write verifyNotes, ${kd.pricing==="per-item"?"price each listing against its own model's fair used price":"choose the pricing mode"}, and record what you decided here.`,
     createdAt:now, updatedAt:now };
   if(kd.models) body.models=p.models;
@@ -1835,6 +2021,8 @@ function openEditor(s){
   $("e_zip").value=v.zip||""; $("e_radius").value=v.radiusMi??""; $("e_areas").value=v.areas||""; $("e_extra").value=(v.extraUrls||[]).join("\n");
   $("e_shipOutside").checked=v.shipOutside===true; $("e_autoSites").checked=v.autoSites!==false;
   $("e_alerts").value=v.alerts||"deals"; $("e_branded").value=String(v.allowBranded===true); $("e_active").value=String(v.active!==false); $("e_notes").value=v.notes||"";
+  const ch=[...new Set([...(SCHED.choices||[1,2,3,7]), everyDays(v)])].sort((a,b)=>a-b);
+  $("e_every").innerHTML=ch.map(c=>`<option value="${c}">${esc(everyText(c))}</option>`).join(""); $("e_every").value=String(everyDays(v));
   const ids=allSiteIds();
   $("e_sources").innerHTML=ids.map(id=>{ const x=site(id); return `<label><input type="checkbox" value="${esc(id)}" data-src="1"${(v.sources||[]).includes(id)?" checked":""}><span>${esc(x.name)}<small>${esc([x.kind, HOW[x.how]].filter(Boolean).join(" · "))}</small></span></label>`; }).join("");
   $("e_delete").hidden=!s; $("e_delete").textContent="Delete search";
@@ -1868,7 +2056,10 @@ $("editor").addEventListener("submit", async e=>{
     extraUrls:$("e_extra").value.split(/\s+/).map(x=>x.trim()).filter(x=>/^https?:\/\//.test(x)),
     sources:[...document.querySelectorAll('#e_sources input[data-src]:checked')].map(x=>x.value), autoSites:$("e_autoSites").checked,
     alerts:$("e_alerts").value, allowBranded:$("e_branded").value==="true", active:$("e_active").value==="true", notes:$("e_notes").value.trim(),
-    updatedAt:new Date().toISOString() };
+    everyDays:Math.max(1, Math.floor(num($("e_every").value)||1)), updatedAt:new Date().toISOString() };
+  // v2.7: turning a search on (or creating one) starts it at the next collector run.
+  const wasOn=editingId ? isOn(searches.find(x=>x.id===editingId)) : false;
+  if(body.active && !wasOn) body.activeSince=body.updatedAt;
   // v2.6: the kind and its limits. A choice list with every box or no box ticked means any.
   const kk=$("e_kind").value, kdS=KINDS[kk]||KINDS_FALLBACK.other;
   body.kind=kk;
@@ -1900,13 +2091,14 @@ $("e_delete").onclick=async()=>{
   let got={s:false,l:false};
   const timer=setTimeout(()=>{ $("status").textContent="Still waiting for your data. It may be out of date."; },10000);
   const done=()=>{ if(got.s&&got.l){ clearTimeout(timer); refreshMarkets(); let deals=0; searches.forEach(s=>{ deals+=openOf(s).filter(l=>score(l,s).isDeal).length; });
-    $("status").textContent=`${searches.length} search${searches.length===1?"":"es"} · ${listings.length} listing${listings.length===1?"":"s"} · ${deals} deal${deals===1?"":"s"}`; } };
+    const on=searches.filter(isOn).length;
+    $("status").textContent=`${on===searches.length?searches.length:`${on} of ${searches.length}`} search${searches.length===1?"":"es"} on · ${listings.length} listing${listings.length===1?"":"s"} · ${deals} deal${deals===1?"":"s"}`; } };
   // Once data has loaded, a failed 60-second refresh keeps what's on screen; the next good refresh clears this line.
   const fail=e=>{ clearTimeout(timer); $("status").textContent=e?.code==="revoked"?"Access to this page's data ended.":(got.s&&got.l)?"Couldn't refresh just now. Showing what loaded; it tries again in a minute.":"Couldn't load your data. Reload the page to try again."; };
   db.collection("meta").onSnapshot(snap=>{ const d=snap.docs.find(x=>x.id==="rules"); applyRulesDoc(d?d.data():null); const a=snap.docs.find(x=>x.id==="architecture"); try{ setArch(a?a.data():null); }catch(e){ ARCH=null; archState="missing"; } refreshMarkets(); render(); }, ()=>{ ARCH=null; archState="missing"; if(tab==="how") render(); });
   db.collection("searches").onSnapshot(snap=>{ searches=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||""))); if(!snap.metadata.fromCache){ got.s=true; searchesLoaded=true; } done(); render(); }, fail);
   db.collection("listings").onSnapshot(snap=>{ listings=snap.docs.map(d=>({id:d.id,...d.data()})); if(!snap.metadata.fromCache) got.l=true; done(); render(); }, fail);
-  db.collection("runs").orderBy("at","desc").limit(100).onSnapshot(snap=>{ runs=snap.docs.map(d=>({id:d.id,...d.data()})); render(); }, ()=>{});
+  db.collection("runs").orderBy("at","desc").limit(300).onSnapshot(snap=>{ runs=snap.docs.map(d=>({id:d.id,...d.data()})); render(); }, ()=>{});
   db.collection("sources").onSnapshot(snap=>{ health=snap.docs.map(d=>({id:d.id,...d.data()})); if(!snap.metadata.fromCache) healthLoaded=true; render(); }, ()=>{});
 })();
 (function boot(){ const h=readHash(); const t=h.tab==="brief"||!h.tab?"listings":h.tab; if(h.params && t==="listings"){ bootParams=h.params; if(h.params.s) selected=h.params.s; } setTab(TABS.includes(t)?t:"listings", true); })();
