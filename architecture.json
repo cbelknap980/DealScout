@@ -1,8 +1,8 @@
 {
  "title": "Two collectors and the page share one private data repo and one rules record",
- "version": "2.7",
+ "version": "2.7.1",
  "builtFrom": "index.html + js/github-db.js, collectors/cloud.md and pc.md, tools/ds.py and rules.json v1.9, as of Nov 21",
- "updatedAt": "2026-11-21",
+ "updatedAt": "2026-11-23",
  "columns": [
   {
    "id": "inputs",
@@ -265,7 +265,7 @@
    "writes": [],
    "rules": [
     "Edited only in a build chat, then one test run of each collector",
-    "photoBackup is \"off\": no paid photo service",
+    "photoBackup is \"off\": no paid photo service, and helper agents get the same rule",
     "Skis: pickup listings rank ahead of ship-in at the same deal state, and ship-in skis with no shipping shown are priced with a $40 estimate"
    ],
    "keywords": [
