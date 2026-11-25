@@ -28,6 +28,8 @@ Commands (run `ds.py help` for the list):
   search <id> '<json>'             update a search's fields (collectors never change active, everyDays, activeSince)
   due [--for cloud|pc] [--json]    which searches this run works on: on, and due by their frequency
   run '<json>'                     add a run record (only for a search that is due this run)
+  beat [worked|nothing-due|skipped] ["note"]  this collector's check-in for the page, at the end of EVERY run
+                                   (v2.8), even one with nothing due; commit after it
   unpaste <id>                     drop a pasted link once its listing is stored
   specs [<searchId>]               fill listing specs from titles (kinds with a title parser, e.g. skis)
   commit "<message>"               push everything recorded since the last commit
@@ -36,6 +38,8 @@ import json, math, os, re, subprocess, sys, time, unicodedata
 from datetime import datetime, timedelta, timezone
 
 OPS = ".ds-ops.jsonl"
+HEART = "heartbeat.json"  # v2.8: each collector's last check-in, so the page shows the runs are still going
+BEAT_RESULTS = ("worked", "nothing-due", "skipped", "running")
 REPLAY = ".ds-replay"  # present only while commit is replaying; if a run dies there, the next commit starts over
 COLLECTOR = os.environ.get("DS_COLLECTOR", "")  # "cloud" or "pc"
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -122,6 +126,10 @@ class Store:
 
     def runs(self):
         return self.read("runs.json", [])
+
+    def heartbeat(self):
+        hb = self.read(HEART, {})
+        return hb if isinstance(hb, dict) else {}
 
     def listing_files(self):
         d = self.path("listings")
@@ -1024,6 +1032,21 @@ def op_unpaste(st, lid, at):
     return f"{lid}: not in pasted"
 
 
+def op_beat(st, collector, beat, at):
+    """v2.8: a collector's check-in. One entry per collector in heartbeat.json, replaced by each check-in, so the
+    page can show when each collector last ran and what came of it even when nothing was due (no run records)."""
+    if collector not in ("cloud", "pc"):
+        die("beat: collector must be cloud or pc")
+    if beat.get("result") not in BEAT_RESULTS:
+        die("beat: result must be one of " + ", ".join(BEAT_RESULTS))
+    hb = dict(st.heartbeat())
+    b = dict(beat)
+    b["at"] = at
+    hb[collector] = b
+    st.write(HEART, hb)
+    return f"{collector} check-in recorded: {b['result']}" + (f" ({b.get('note')})" if b.get("note") else "")
+
+
 OPS_FN = {
     "upsert": lambda st, a, at: op_upsert(st, a["items"], at),
     "check": lambda st, a, at: op_check(st, a["id"], a["check"], at),
@@ -1035,6 +1058,7 @@ OPS_FN = {
     "run": lambda st, a, at: op_run(st, a["run"], at),
     "unpaste": lambda st, a, at: op_unpaste(st, a["id"], at),
     "specs": lambda st, a, at: op_specs(st, a.get("id"), at),
+    "beat": lambda st, a, at: op_beat(st, a["collector"], a["beat"], at),
 }
 
 
@@ -1052,6 +1076,44 @@ def pending_ops(st):
         return []
     with open(p, encoding="utf-8") as f:
         return [json.loads(x) for x in f if x.strip()]
+
+
+def make_beat(st, result=None, note=None):
+    """This run's check-in: when it started (the run's first ds summary or ds due), what was due, the run records
+    it wrote, and the result. With no result given: worked when it wrote counted run records, skipped when every
+    record it wrote was skipped (PC offline, rules unreadable), nothing-due when nothing was due."""
+    plan = run_plan(st)
+    mine = [r for r in st.runs() if r.get("collector") == COLLECTOR and str(r.get("at") or "") >= str(plan.get("at") or "")]
+    if result is None:
+        if any(run_counts(r) for r in mine):
+            result = "worked"
+        elif mine:
+            result = "skipped"
+        elif not plan["due"]:
+            result = "nothing-due"
+        else:
+            die("beat: searches were due (" + ", ".join(plan["due"]) + ") but this run wrote no run records. "
+                "Write them first, or say the result: ds beat worked|skipped \"<note>\"")
+    if result not in BEAT_RESULTS:
+        die("beat: result must be worked, nothing-due or skipped")
+    if not note:
+        note = {"worked": "Searched " + ", ".join(plan["due"]) if plan["due"] else "Worked",
+                "nothing-due": "Nothing due this run", "skipped": next((str(r.get("note")) for r in mine), "Run skipped"),
+                "running": "Run in progress"}[result]
+    b = {"startedAt": plan.get("at"), "result": result, "note": str(note)[:300], "due": list(plan["due"]),
+         "runs": len(mine), "rules": str(st.rules().get("version") or "")}
+    nd = {sid: i.get("why") or "not due" for sid, i in (plan.get("info") or {}).items() if not i.get("due")}
+    if nd:
+        b["notDue"] = nd
+    return b
+
+
+def cmd_beat(st, argv):
+    if COLLECTOR not in ("cloud", "pc"):
+        die("beat: only a collector run checks in (dealscout-data/.ds-collector says cloud or pc)")
+    result = argv[0] if argv and argv[0] in BEAT_RESULTS[:3] else None
+    rest = argv[1:] if result else argv
+    record(st, "beat", {"collector": COLLECTOR, "beat": make_beat(st, result, " ".join(rest).strip() or None)})
 
 
 # ---------------------------------------------------------------- git
@@ -1101,6 +1163,15 @@ def commit(st, message):
     if not ops:
         print("nothing to commit")
         return
+    # v2.8: a collector's save partway through a run also checks in as "running", unless this run's final
+    # check-in (ds beat) is already recorded, so the page shows a run that is going or one that stopped partway.
+    if COLLECTOR in ("cloud", "pc") and not any(o.get("op") == "beat" for o in ops):
+        hb = st.heartbeat().get(COLLECTOR) or {}
+        plan = run_plan(st)
+        if not (hb.get("startedAt") == plan.get("at") and hb.get("result") != "running"):
+            b = make_beat(st, "running", f"Run in progress: saved {len(ops)} change(s) ({message[:80]})")
+            record(st, "beat", {"collector": COLLECTOR, "beat": b})
+            ops = pending_ops(st)
     who = COLLECTOR or "build"
     git(st, "config", "user.name", f"Deal Scout {who}")
     git(st, "config", "user.email", "noreply@anthropic.com")
@@ -1194,7 +1265,7 @@ def cmd_summary(st):
     print(f"rules v{r.get('version')} · {len(st.searches())} searches · {len(L)} listings · {len(st.pasted())} pasted links")
     plans = {COLLECTOR: run_plan(st)} if COLLECTOR else {c: run_plan(st, c) for c in ("cloud", "pc")}
     for who, plan in plans.items():
-        print(f"\nTHIS RUN ({who}): " + (f"due: {', '.join(plan['due'])}" if plan["due"] else "NOTHING DUE: no search is on and due for this collector")
+        print(f"\nTHIS RUN ({who}): " + (f"due: {', '.join(plan['due'])}" if plan["due"] else "NOTHING DUE: no search is on and due for this collector (still check in: ds beat nothing-due, then ds commit)")
               + "  (ds due shows why; work only on due searches)")
     for sid, s in st.searches().items():
         mine = {k: v for k, v in L.items() if v.get("searchId") == sid}
@@ -1228,6 +1299,11 @@ def cmd_summary(st):
             if x:
                 rs.append(f"{c}:{x.get('state')}@{str(x.get('at') or '')[:16]}")
         print(f"  {sid:14} how={s.get('how', '?'):5} " + "  ".join(rs))
+    print("\nCOLLECTORS (last check-in, heartbeat.json; every run checks in, even with nothing due)")
+    hb = st.heartbeat()
+    for c in ("cloud", "pc"):
+        b = hb.get(c)
+        print(f"  {c:5} " + (f"{b.get('at')} {b.get('result')}: {str(b.get('note') or '')[:100]}" if isinstance(b, dict) else "no check-in yet"))
     print("\nLAST RUNS")
     seen = set()
     for run in st.runs():
@@ -1389,7 +1465,7 @@ def cmd_due(st, argv):
         for sid, s in ss.items():
             i = plan["info"].get(sid) or {}
             print(f"  {sid:22} {schedule_line(sid, s, i) if i else '?'}" + (f" · last {w} run {str(i.get('last'))[:16]}" if i.get("last") else ""))
-        print(f"DUE THIS RUN ({w}): " + (" ".join(plan["due"]) if plan["due"] else "nothing. Read pasted links only, then finish without run records."))
+        print(f"DUE THIS RUN ({w}): " + (" ".join(plan["due"]) if plan["due"] else "nothing. Read pasted links only, write no run records, then check in (ds beat nothing-due) and commit."))
 
 
 def not_due_here(st, sid):
@@ -1525,6 +1601,8 @@ def dispatch(st, c, a):
         record(st, "run", {"run": run})
     elif c == "due":
         cmd_due(st, a)
+    elif c == "beat":
+        cmd_beat(st, a)
     elif c == "unpaste":
         record(st, "unpaste", {"id": a[0]})
     elif c == "specs":

@@ -210,6 +210,26 @@ details.fold .body{display:grid;gap:10px;margin-top:12px}
 .sw:disabled{cursor:default;opacity:.6}
 .seg .offtag{font-family:var(--mono);font-size:11px;font-weight:500;text-transform:lowercase;border:1px solid currentColor;border-radius:999px;padding:0 6px;opacity:.8}
 .subline .offnote{color:var(--warn);font-weight:600}
+
+/* collector check-ins (v2.8): a line under the header status on every tab, and a block on Searches */
+.statcol{display:grid;gap:4px;justify-items:end;text-align:right}
+.beat{border:0;background:none;padding:0;font:inherit;font-size:13.5px;color:var(--muted);cursor:pointer;display:inline-flex;gap:7px;align-items:center;text-align:left}
+.beat:hover{color:var(--head)}
+.beat .bdot{width:8px;height:8px;border-radius:50%;background:var(--line);flex:none}
+.beat.ok .bdot,.beat.run .bdot{background:var(--good)}
+.beat.warn{color:var(--warn)} .beat.warn .bdot{background:var(--warn)}
+.beat.bad{color:var(--bad)} .beat.bad .bdot{background:var(--bad)}
+.colls{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px 28px}
+.coll{border-top:1px solid var(--line);padding-top:14px;display:grid;gap:7px;align-content:start;min-width:0}
+.coll .ch{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between}
+.coll h3{font-size:18px;line-height:1.3}
+.coll .cl{font-size:14.5px;line-height:1.6;overflow-wrap:anywhere}
+.coll .cl b{font-weight:700;color:var(--head)}
+.coll .cfix{font-size:14px;line-height:1.55;color:var(--warn)}
+.coll.bad .cfix{color:var(--bad)}
+@media (max-width:640px){
+  .statcol{justify-items:start;text-align:left}
+}
 @media (max-width:640px){
   .sr{grid-template-columns:auto minmax(0,1fr);padding:14px}
   .srside{grid-column:1/-1;justify-content:space-between;border-top:1px solid var(--line);padding-top:10px}
@@ -421,7 +441,10 @@ body.sheet-open{overflow:hidden}
         <button class="tab" role="tab" id="tab-checks" data-tab="checks" aria-selected="false">Checks</button>
         <button class="tab" role="tab" id="tab-how" data-tab="how" aria-selected="false">How it works</button>
       </nav>
-      <span class="status" id="status">Connecting to your saved searches…</span>
+      <div class="statcol">
+        <span class="status" id="status">Connecting to your saved searches…</span>
+        <button type="button" class="beat" id="beat" hidden aria-label="Collector runs: details on Searches"><span class="bdot"></span><span id="beatText"></span></button>
+      </div>
     </div>
   </div>
 </header>
@@ -484,7 +507,11 @@ body.sheet-open{overflow:hidden}
       </div>
       <div class="srlist" id="srList"></div>
       <div class="row-actions"><button type="button" class="newbtn" id="srNew">+ New search</button></div>
-      <p class="note" id="srNote"></p>
+      <section class="block" id="collBlock" aria-labelledby="collTitle">
+        <div class="block-head"><div><span class="section-label">Collector runs</span><h2 class="block-title" id="collTitle">Checking on the collectors…</h2></div></div>
+        <div class="colls" id="collList"></div>
+        <p class="note" id="srNote"></p>
+      </section>
     </section>
 
     <!-- SITES -->
@@ -659,7 +686,7 @@ const RULES = {
 };
 let RULES_DOC = null;
 const TABS = ["listings","searches","sites","checks","how"];
-const PAGE_VERSION = "2.7";
+const PAGE_VERSION = "2.8";
 let ARCH = null, archState = "loading";
 const EMPTY = document.getElementById("empty").outerHTML;
 const $ = id => document.getElementById(id);
@@ -670,6 +697,7 @@ const num = v => (v===""||v==null||isNaN(Number(v))) ? null : Number(v);
 
 let db = null, canWrite = true;
 let searches = [], listings = [], runs = [], health = [], healthLoaded = false;
+let beats = {}, beatsLoaded = false;  // v2.8: heartbeat.json, each collector's last check-in
 let selected = null, editingId = null, tab = "listings";
 let MK = new Map();
 try { selected = localStorage.getItem("ds.sel"); } catch(e) {}
@@ -751,6 +779,128 @@ function schedText(s){
   const nx=nextRun(s);
   const nxT=!nx ? "" : nx.now ? "running now" : (!last || (s.activeSince && String(last.at||"")<String(s.activeSince))) ? `starts ${whenText(nx.at)}` : `next ${whenText(nx.at)}`;
   return [everyText(everyDays(s)), lastT, nxT].filter(Boolean).join(" · ");
+}
+
+/* ---------- collector check-ins (v2.8) ----------
+   Every collector run ends with `ds.py beat`, even a run with nothing due, which writes the collector's entry in
+   heartbeat.json: at, startedAt, result (worked, nothing-due, skipped, or running for a save partway through a run),
+   note, due and notDue. A save partway through a run checks in as running. The page compares the last check-in
+   with the run times in rules schedule.runs: a scheduled run more than BEAT_GRACE_H hours old with no check-in after
+   it counts as missed. */
+const BEAT_GRACE_H = 3;
+const COLL_NAME = {cloud:"Cloud collector", pc:"PC collector"};
+const COLL_SHORT = {cloud:"Cloud", pc:"PC"};
+function clockText(t){ const m=String(t).match(/^(\d{1,2}):(\d{2})$/); if(!m) return String(t); const h=+m[1]; return `${h%12||12}:${m[2]} ${h<12?"am":"pm"}`; }
+function listText(a){ return a.length<2 ? a.join("") : a.slice(0,-1).join(", ")+" and "+a[a.length-1]; }
+// Scheduled run times (ms) for collector c after `from` and up to `to`, in the schedule's time zone.
+function slotTimes(c, from, to){
+  const times=(SCHED.runs||{})[c]||[], out=[];
+  if(!times.length || !(to>from)) return out;
+  from=Math.max(from, to-45*DAY);
+  for(let d=Math.floor(wallMs(from)/DAY)-1, end=Math.floor(wallMs(to)/DAY)+1; d<=end; d++) times.forEach(t=>{
+    const m=String(t).match(/^(\d{1,2}):(\d{2})$/); if(!m) return;
+    const at=fromWall(d*DAY+((+m[1])*60+(+m[2]))*6e4); if(at>from && at<=to) out.push(at); });
+  return out.sort((a,b)=>a-b);
+}
+// A past time: "today 9:06 am", "yesterday 8:37 pm", "Tue Nov 24, 8:37 pm".
+function pastText(ms){
+  const tz=SCHED.timezone||"America/Denver", today=Math.floor(wallMs(Date.now())/DAY), d=Math.floor(wallMs(ms)/DAY);
+  let time; try{ time=new Date(ms).toLocaleTimeString("en-US",{timeZone:tz, hour:"numeric", minute:"2-digit"}).toLowerCase(); }catch(e){ time=new Date(ms).toLocaleTimeString("en-US",{hour:"numeric", minute:"2-digit"}).toLowerCase(); }
+  if(d===today) return "today "+time;
+  if(d===today-1) return "yesterday "+time;
+  let day; try{ day=new Date(ms).toLocaleDateString("en-US",{timeZone:tz, weekday:"short", month:"short", day:"numeric"}); }catch(e){ day=new Date(ms).toLocaleDateString("en-US",{weekday:"short", month:"short", day:"numeric"}); }
+  return `${day}, ${time}`;
+}
+// A scheduled run's name: "8:36 pm" within the last day, "Tue 8:36 pm" before that.
+function slotName(ms){
+  const tz=SCHED.timezone||"America/Denver";
+  let time, wd; try{ time=new Date(ms).toLocaleTimeString("en-US",{timeZone:tz, hour:"numeric", minute:"2-digit"}).toLowerCase(); wd=new Date(ms).toLocaleDateString("en-US",{timeZone:tz, weekday:"short"}); }catch(e){ time=new Date(ms).toLocaleTimeString("en-US",{hour:"numeric", minute:"2-digit"}).toLowerCase(); wd=new Date(ms).toLocaleDateString("en-US",{weekday:"short"}); }
+  return Date.now()-ms<DAY ? time : `${wd} ${time}`;
+}
+function beatNote(b){ return String(b?.note||"").replace(/^rules v[\d.]+:\s*/i,"").trim(); }
+// Why nothing was due, from the check-in's notDue: "every search is off" or "Daytona 675R off; Used skis not due yet".
+function notDueText(b){
+  const nd=b?.notDue && typeof b.notDue==="object" ? Object.entries(b.notDue) : [];
+  if(!nd.length) return "";
+  if(nd.every(([,w])=>w==="off")) return nd.length>1 ? "every search is off" : `${searches.find(s=>s.id===nd[0][0])?.name||nd[0][0]} is off`;
+  return nd.map(([id,w])=>`${searches.find(s=>s.id===id)?.name||id} ${w==="off"?"off":"not due yet"}`).join("; ");
+}
+function collState(c, now){
+  now=now||Date.now();
+  const b=beats[c], grace=BEAT_GRACE_H*36e5, times=(SCHED.runs||{})[c]||[];
+  const next=slotTimes(c, now, now+8*DAY)[0]||null;
+  const x={c, b, next, times, level:"none", label:"No check-in yet", missed:[], lastSlot:null};
+  if(!b || isNaN(new Date(b.at||"").getTime())) return x;
+  const at=new Date(b.at).getTime();
+  x.missed=slotTimes(c, at, now-grace);
+  x.lastSlot=slotTimes(c, at, now).pop()||null;  // a run that fired since the last check-in
+  const stale=now-at>grace;
+  if(x.missed.length>=2){ x.level="bad"; x.label=`Missed ${x.missed.length} runs`; }
+  else if(x.missed.length===1){ x.level="warn"; x.label="Missed a run"; }
+  else if(b.result==="running" && !stale){ x.level="run"; x.label="Running now"; }
+  else if(b.result==="running"){ x.level="warn"; x.label="Stopped partway"; }
+  else if(b.result==="skipped"){ x.level="warn"; x.label="Couldn't search"; }
+  else { x.level="ok"; x.label="On schedule"; }
+  return x;
+}
+// What the last run did, in a sentence.
+function resultText(x){
+  const b=x.b, note=beatNote(b);
+  if(b.result==="nothing-due"){ const why=notDueText(b); return `Nothing due${why?`: ${why}`:""}.`; }
+  if(b.result==="running") return x.level==="run" ? `Running: ${note||"in progress"}.` : `It saved some work and then stopped before finishing${note?` (${note})`:""}.`;
+  if(b.result==="skipped") return `Couldn't search: ${note||"run skipped"}.`;
+  return note ? note.replace(/\.?$/,".") : "Searched the searches that were due.";
+}
+function fixFor(x){
+  const pc=x.c==="pc", task=`"Deal Scout: ${pc?"PC":"cloud"} collector"`;
+  if(x.level==="bad" || x.level==="warn" && x.missed.length) return pc
+    ? `Its ${slotName(x.missed[x.missed.length-1])} run didn't check in. The PC needs to be on with the Claude app open at run time, and the ${task} scheduled task switched on.`
+    : `Its ${slotName(x.missed[x.missed.length-1])} run didn't check in. Check that the ${task} scheduled task is still on; usage limits can also hold a run back.`;
+  if(x.label==="Stopped partway") return "The next run picks up where it stopped.";
+  if(x.label==="Couldn't search") return pc ? "Leave the PC on with the Claude app open; the searches it missed stay due for its next run." : "The searches it missed stay due for its next run.";
+  return "";
+}
+function collHeadline(xs){
+  const none=xs.filter(x=>x.level==="none"), prob=xs.filter(x=>x.level==="bad"||x.level==="warn"), run=xs.filter(x=>x.level==="run");
+  if(none.length===xs.length) return "Waiting for the collectors' first check-in.";
+  if(prob.length) return prob.map(x=>`The ${COLL_SHORT[x.c]==="PC"?"PC":"cloud"} collector ${x.missed.length>1?`missed its last ${x.missed.length} runs`:x.missed.length?"missed its last run":x.label==="Stopped partway"?"stopped partway through its last run":"couldn't search last run"}.`).join(" ");
+  if(run.length) return `The ${run.map(x=>COLL_SHORT[x.c]==="PC"?"PC":"cloud").join(" and ")} collector is running now.`;
+  if(none.length) return `The ${none.map(x=>COLL_SHORT[x.c]==="PC"?"PC":"cloud").join(" and ")} collector hasn't checked in yet; the other is on schedule.`;
+  return "Both collectors are running on schedule.";
+}
+// Header line on every tab: "Cloud ran 3 h ago, nothing due · PC ran 16 h ago, nothing due".
+function renderBeat(){
+  const el=$("beat");
+  if(!beatsLoaded){ el.hidden=true; return; }
+  const xs=["cloud","pc"].map(c=>collState(c)), rank={none:0, ok:1, run:1, warn:2, bad:3};
+  const worst=xs.reduce((a,x)=>rank[x.level]>rank[a.level]?x:a, xs[0]);
+  const part=x=>{ const n=COLL_SHORT[x.c];
+    if(x.level==="none") return `${n} hasn't checked in yet`;
+    if(x.missed.length) return x.missed.length>1 ? `${n} missed ${x.missed.length} runs` : `${n} missed its ${slotName(x.missed[0])} run`;
+    if(x.level==="run") return `${n} running now`;
+    return `${n} ran ${ago(x.b.at)}${x.b.result==="nothing-due"?", nothing due":x.label==="Couldn't search"?", couldn't search":x.label==="Stopped partway"?", stopped partway":""}`; };
+  el.hidden=false;
+  el.className="beat "+(xs.every(x=>x.level==="none")?"none":worst.level);
+  $("beatText").textContent=xs.map(part).join(" · ");
+  el.title=xs.map(x=>`${COLL_NAME[x.c]}: ${x.label}`).join(". ")+". Details on Searches.";
+}
+function renderCollectors(){
+  if(!beatsLoaded){ $("collTitle").textContent="Checking on the collectors…"; $("collList").innerHTML=""; return; }
+  const xs=["cloud","pc"].map(c=>collState(c));
+  $("collTitle").textContent=collHeadline(xs);
+  const cls={ok:"s-ok", run:"s-ok", warn:"s-warn", bad:"s-bad", none:"s-idle"};
+  $("collList").innerHTML=xs.map(x=>{
+    const b=x.b, fix=fixFor(x), last=runs.find(r=>r.collector===x.c);
+    const lastLine = b ? `<b>Last run</b> ${esc(pastText(new Date(b.at).getTime()))} (${esc(ago(b.at))}). ${esc(resultText(x))}`
+      : `<b>Last run</b> ${last?`${esc(ago(last.at))}, before check-ins started`:"none recorded yet"}. Every run checks in from v2.8 on, even one with nothing due.`;
+    const going = x.lastSlot && x.level!=="run" && !x.missed.includes(x.lastSlot) ? `The ${slotName(x.lastSlot)} run should check in soon. ` : "";
+    const nextLine = `<b>Next run</b> ${x.next?esc(whenText(x.next)):"not scheduled"}. ${esc(going)}Runs ${x.times.length>1?"at "+esc(listText(x.times.map(clockText))):x.times.length?"daily at "+esc(clockText(x.times[0])):"on no schedule"}${x.c==="pc"?", on your PC with the Claude app open":""}.`;
+    return `<div class="coll ${x.level}" data-c="${x.c}">
+      <div class="ch"><h3>${esc(COLL_NAME[x.c])}</h3><span class="st ${cls[x.level]}">${esc(x.label)}</span></div>
+      <div class="cl">${lastLine}</div>
+      <div class="cl">${nextLine}</div>
+      ${fix?`<div class="cfix">${esc(fix)}</div>`:""}
+    </div>`; }).join("");
 }
 
 /* ---------- pricing ---------- */
@@ -1064,7 +1214,7 @@ function renderSites(){
     $("eventsBlock").hidden=!ev.length;
     $("eventsList").innerHTML=ev.map(e=>`<div class="event"><div class="d">${esc(e.date?new Date(e.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}):"")}</div><div><strong>${e.url?`<a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.name)}</a>`:esc(e.name)}</strong><div class="note">${esc([e.time,e.place,e.note].filter(Boolean).join(" · "))}</div></div></div>`).join("");
   }
-  const beat=["cloud","pc"].map(c=>{ const r=lastRunBy(c); return `${c==="pc"?"PC":"Cloud"} collector ${r?"last ran "+ago(r.at):"hasn't run yet"}`; });
+  const beat=["cloud","pc"].map(c=>{ const b=beats[c], r=lastRunBy(c), at=b?.at||r?.at; return `${COLL_NAME[c]} ${at?"last ran "+ago(at):"hasn't run yet"}${b?.result==="nothing-due"?" (nothing due)":""}`; });
   $("connBeat").textContent=beat.join(" · ");
   const all=allSiteIds().filter(id=>searches.some(s=>(s.sources||[]).includes(id)) || health.some(h=>h.id===id));
   $("allSites").innerHTML=`<thead><tr><th>Site</th><th>Status</th><th>Used by</th><th>Last read</th></tr></thead><tbody>${all.map(id=>{
@@ -1128,8 +1278,8 @@ function renderSearches(){
       </div>
     </div>`; }).join("") || (searchesLoaded?`<div class="empty"><strong>No saved searches yet.</strong><br>Start one with + New search.</div>`:"");
   $("srNew").hidden=!canWrite;
-  const times=Object.entries(SCHED.runs||{}).map(([c,v])=>`${c==="pc"?"PC":"cloud"} ${v.map(t=>{ const m=String(t).match(/^(\d{1,2}):(\d{2})$/); if(!m) return t; const h=+m[1]; return `${h%12||12}:${m[2]} ${h<12?"am":"pm"}`; }).join(", ")}`).join("; ");
-  $("srNote").textContent = `A day here runs from ${((SCHED.dayStartHour??17)%12)||12} ${(SCHED.dayStartHour??17)<12?"am":"pm"} to ${((SCHED.dayStartHour??17)%12)||12} ${(SCHED.dayStartHour??17)<12?"am":"pm"}, Denver time, so "every day" means one cloud pass and one PC pass each evening. Collector runs: ${times}. A run that finds nothing due stops right away.`;
+  $("srNote").textContent = `A day here runs from ${((SCHED.dayStartHour??17)%12)||12} ${(SCHED.dayStartHour??17)<12?"am":"pm"} to ${((SCHED.dayStartHour??17)%12)||12} ${(SCHED.dayStartHour??17)<12?"am":"pm"}, Denver time, so "every day" means one cloud pass and one PC pass each evening. Every run checks in here when it ends, even one that finds nothing due; a run more than ${BEAT_GRACE_H} hours old with no check-in counts as missed.`;
+  renderCollectors();
 }
 async function patchSearch(id, patch, okMsg, el){
   if(!db || !canWrite){ toast("Saving isn't available in this view."); return false; }
@@ -1665,6 +1815,8 @@ function hwLive(n){
   const lv = n.live; if(!lv || typeof lv!=="object") return null;
   switch(lv.type){
     case "run": {
+      const b = beats[lv.collector];
+      if(b && b.at){ const x=collState(lv.collector); return {text:`${x.label} · last check-in ${ago(b.at)}: ${resultText(x).slice(0,90)}`, badge: b.rules?"rules v"+b.rules:null}; }
       const r = lastRunBy(lv.collector); if(!r) return {text:"No runs yet"};
       let note = String(r.note||""), badge = null;
       const m = note.match(/^rules v([\w.]+):\s*/i); if(m){ badge="rules v"+m[1]; note=note.slice(m[0].length); }
@@ -1873,6 +2025,7 @@ function render(){
   refreshMarkets();
   renderRules();
   renderConnBar();
+  renderBeat();
   if(tab==="listings") renderListings();
   if(tab==="searches") renderSearches();
   if(tab==="sites") renderSites();
@@ -1881,6 +2034,7 @@ function render(){
 }
 setInterval(()=>{ if(tab==="listings"||tab==="sites"||tab==="searches") render(); }, 5*60*1000);
 $("connBar").addEventListener("click",()=>setTab("sites"));
+$("beat").addEventListener("click",()=>{ setTab("searches"); setTimeout(()=>$("collBlock").scrollIntoView({block:"start", behavior:"smooth"}),60); });
 
 /* ---------- quick add ---------- */
 // Kind picker on the quick box (v2.6): guessed from the words as you type until you pick one yourself.
@@ -2099,6 +2253,7 @@ $("e_delete").onclick=async()=>{
   db.collection("searches").onSnapshot(snap=>{ searches=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||""))); if(!snap.metadata.fromCache){ got.s=true; searchesLoaded=true; } done(); render(); }, fail);
   db.collection("listings").onSnapshot(snap=>{ listings=snap.docs.map(d=>({id:d.id,...d.data()})); if(!snap.metadata.fromCache) got.l=true; done(); render(); }, fail);
   db.collection("runs").orderBy("at","desc").limit(300).onSnapshot(snap=>{ runs=snap.docs.map(d=>({id:d.id,...d.data()})); render(); }, ()=>{});
+  db.collection("collectors").onSnapshot(snap=>{ beats=Object.fromEntries(snap.docs.map(d=>[d.id, d.data()])); beatsLoaded=true; render(); }, ()=>{});
   db.collection("sources").onSnapshot(snap=>{ health=snap.docs.map(d=>({id:d.id,...d.data()})); if(!snap.metadata.fromCache) healthLoaded=true; render(); }, ()=>{});
 })();
 (function boot(){ const h=readHash(); const t=h.tab==="brief"||!h.tab?"listings":h.tab; if(h.params && t==="listings"){ bootParams=h.params; if(h.params.s) selected=h.params.s; } setTab(TABS.includes(t)?t:"listings", true); })();
