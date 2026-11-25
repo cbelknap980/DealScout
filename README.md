@@ -9,10 +9,10 @@ Cameron's deal finder. He saves a search for an item (a Triumph Daytona 675R, us
 
 | Part | Where | What it does |
 |---|---|---|
-| Page | `index.html`, `js/github-db.js` | GitHub Pages site. Reads the data repo with a fine-grained GitHub token pasted once per device; re-scores every listing in the browser; writes only `searches.json`, `pasted.json` and `status.json`. The Searches tab turns each search on or off and sets how often it runs. |
+| Page | `index.html`, `js/github-db.js` | GitHub Pages site. Reads the data repo with a fine-grained GitHub token pasted once per device; re-scores every listing in the browser; writes only `searches.json`, `pasted.json` and `status.json`. The Searches tab turns each search on or off and sets how often it runs, and shows each collector's last run; a line under the header on every tab says when each collector last ran. |
 | Cloud collector | `collectors/cloud.md` | Scheduled Claude task; fires at 12:06 and 6:06 am/pm MT and works only the searches that are on and due (an every-day search runs at 6:06 pm). Reads cloud-readable sites with web fetch, makes site plans, reads each ad, marks deal-priced ads for a photo check. Never emails. |
 | PC collector | `collectors/pc.md` | Scheduled Claude task, once daily at 8:36 pm MT, with Cameron's PC linked, for the searches that are on and due. Reads Facebook Marketplace, Cycle Trader, eBay, nationwide Craigslist and Powder7 in the Claude app's browser, reviews the photos of every deal-priced ad, sends deal emails. |
-| Data helper | `tools/ds.py` | The only way collectors read and change the data. Records each change and, on push, replays them onto the newest copy if the other collector pushed first. `ds.py due` lists the searches due this run. Python 3 standard library only. |
+| Data helper | `tools/ds.py` | The only way collectors read and change the data. Records each change and, on push, replays them onto the newest copy if the other collector pushed first. `ds.py due` lists the searches due this run; `ds.py beat` checks the collector in at the end of every run, even one with nothing due. Python 3 standard library only. |
 | Rules | `dealscout-data/rules.json` | Thresholds, check rules and wording, and the item kinds (Vehicle, Skis, Something else) with each kind's fields and filters, read by both collectors and the page. Change a rule there, once. |
 | Map | `architecture.json` | The page's "How it works" tab, searchable. |
 | Geo | `geo.json` | ZIP and city coordinates for distances from home. |
@@ -40,6 +40,7 @@ python3 tools/ds.py --data ../dealscout-data score used-skis
 
 ## History
 
+- v2.8 (Nov 25, 2026): collector check-ins. Every collector run ends with `ds.py beat`, which writes the collector's last run and result to `heartbeat.json` in the data repo, even when nothing was due, and a save partway through a run checks in as running. The page shows a line under the header on every tab ("Cloud ran 3 h ago, nothing due · PC ran 13 h ago, nothing due") and a Collector runs block on Searches, and flags a scheduled run with no check-in 3 hours later as missed (rules v1.10).
 - v2.6 (Nov 20, 2026): item kinds. Each search is a Vehicle, Skis or Something else search, and the kind sets the editor fields, the sidebar filters and what the collectors record. Ski searches filter and limit by brand, model, length, underfoot and bindings, rank pickup listings ahead of ship-in ones, and price ship-in skis with no shipping shown at a $40 estimate (rules v1.7).
 - v2.5 (Nov 20, 2026): a search's own limits from Edit search (year range, max miles, price ceiling, ship rule) decide which listings are in it. Listings outside them never count as deals, leave the open list for Status: Outside search, and year and miles keep them out of the median; the sidebar filters only narrow inside the limits (rules v1.6).
 - v2.4 (Nov 20, 2026): a listing nothing has shown for 7 days, while its site was read fine, counts as probably gone and leaves the open list (rules v1.5).

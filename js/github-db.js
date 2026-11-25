@@ -20,6 +20,7 @@
     searches  searches.json                         (read and write)
     listings  listings/*.json + pasted.json, with status.json laid over each listing
     runs      runs.json                             (read only)
+    collectors heartbeat.json: each collector's last check-in, docs "cloud" and "pc" (read only, v2.8)
     sources   sites.json                            (read only)
 */
 (function () {
@@ -157,6 +158,9 @@
       Object.keys(st).forEach(function (id) { out.push({ id: id, data: st[id] }); });
     } else if (name === "runs") {
       (fileJson("runs.json", []) || []).forEach(function (r) { out.push({ id: r.id, data: r }); });
+    } else if (name === "collectors") {
+      var hb = fileJson("heartbeat.json", {}) || {};
+      Object.keys(hb).forEach(function (id) { if (hb[id] && typeof hb[id] === "object") out.push({ id: id, data: hb[id] }); });
     } else if (name === "listings") {
       var status = fileJson("status.json", {}), seen = {};
       Object.keys(files).filter(function (p) { return /^listings\/[^/]+\.json$/.test(p); }).sort().forEach(function (p) {
