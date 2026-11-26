@@ -686,7 +686,7 @@ const RULES = {
 };
 let RULES_DOC = null;
 const TABS = ["listings","searches","sites","checks","how"];
-const PAGE_VERSION = "2.8";
+const PAGE_VERSION = "2.8.1";
 let ARCH = null, archState = "loading";
 const EMPTY = document.getElementById("empty").outerHTML;
 const $ = id => document.getElementById(id);
@@ -788,6 +788,7 @@ function schedText(s){
    with the run times in rules schedule.runs: a scheduled run more than BEAT_GRACE_H hours old with no check-in after
    it counts as missed. */
 const BEAT_GRACE_H = 3;
+const BEATS_SINCE = "2026-11-25T19:00:00Z";  // v2.8 went live (first cloud check-in 12:07 pm MT Nov 25): runs since then check in
 const COLL_NAME = {cloud:"Cloud collector", pc:"PC collector"};
 const COLL_SHORT = {cloud:"Cloud", pc:"PC"};
 function clockText(t){ const m=String(t).match(/^(\d{1,2}):(\d{2})$/); if(!m) return String(t); const h=+m[1]; return `${h%12||12}:${m[2]} ${h<12?"am":"pm"}`; }
@@ -830,7 +831,13 @@ function collState(c, now){
   const b=beats[c], grace=BEAT_GRACE_H*36e5, times=(SCHED.runs||{})[c]||[];
   const next=slotTimes(c, now, now+8*DAY)[0]||null;
   const x={c, b, next, times, level:"none", label:"No check-in yet", missed:[], lastSlot:null};
-  if(!b || isNaN(new Date(b.at||"").getTime())) return x;
+  if(!b || isNaN(new Date(b.at||"").getTime())){
+    // Never checked in: a scheduled run since check-ins went live with no check-in still counts as missed.
+    x.missed=slotTimes(c, Date.parse(BEATS_SINCE), now-grace);
+    if(x.missed.length>=2){ x.level="bad"; x.label=`Missed ${x.missed.length} runs`; }
+    else if(x.missed.length===1){ x.level="warn"; x.label="Missed a run"; }
+    return x;
+  }
   const at=new Date(b.at).getTime();
   x.missed=slotTimes(c, at, now-grace);
   x.lastSlot=slotTimes(c, at, now).pop()||null;  // a run that fired since the last check-in
